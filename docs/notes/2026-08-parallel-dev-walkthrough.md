@@ -566,6 +566,8 @@ is basic resource ownership. The current gap means each create+rm cycle leaks ~6
 **Expected fix:** `sandbox rm` deletes associated workspace disk files as part of the same
 operation. R1 handles the orphan case for disks that survive abnormal termination.
 
+> **UPDATE 2026-08-18:** Workspace disks are now ULID-keyed (`<ULID>-workspace.ext4`) and are reclaimed by `nexus3 reap --apply` once the sandbox record is removed. The globally-named shadow disk files (`.next.shadow.ext4`, etc.) from this walkthrough are superseded: the new parallel-dev approach uses named volumes (`--mount-named`) which are intentionally user-owned and must be reclaimed explicitly with `nexus3 volume rm` or `nexus3 volume prune`. The legacy shadow disk files observed in Step 11 should be cleaned up with `nexus3 reap --apply` or `rm` manually.
+
 ### GAP-4: Harvest empty-placeholder behavior for stopped sandboxes
 
 `nexus3 harvest <motive> <guest-path> <host-dir>` with a stopped sandbox creates a 0-byte
@@ -606,6 +608,8 @@ outcome reporting to harvest's acceptance criteria.
 Two sandboxes from the same workspace share shadow disk files with no sandbox ID in the path. CloudHypervisor holds exclusive write locks. The parallel-dev flow's primary use case is impossible without fixing this.  
 **Blocks:** M3 (bulk create), the entire parallel-dev concept.
 
+> **UPDATE 2026-08-18 (D-PD-82):** Named volumes (`--mount-named kind=disk`) replace shadow disks for the parallel-dev use case. Each sandbox gets its own named volume (e.g. `myapp-node_modules`) identified by project slug — no global lock contention. Two or more sandboxes from the same project can now run concurrently. The shadow disk mechanism still exists for backward compatibility but is no longer the recommended path.
+
 ### F2: `nexus3-agent-base` is stale — workspace not auto-mounted
 **File:** `internal/cli/cmd_sandbox.go:1197`, agent image built 2026-08-11  
 **Symptom:** Agent ignores `--workspace-mount` kernel cmdline args; disks attached as /dev/vdb–vdf but not mounted; `/workspace/hanlun-lms` doesn't exist in guest.  
@@ -629,6 +633,8 @@ The error burns 28 seconds of workspace capture before failing. There's no menti
 **Symptom:** After `sandbox rm`, 6.7 GiB per sandbox is stranded on disk with no nexus3 command able to reclaim it. `nexus3 recover` only sees live records, not orphaned files.  
 **Measured:** 2 sandboxes created and removed → 13.4 GiB stranded before manual delete.  
 **Blocks:** R1 (reaper), operator trust. The motive objective quotes "11.2 GiB currently stranded on this host" — this walkthrough added to it.
+
+> **UPDATE 2026-08-18 (D-PD-73, D-PD-74, D-PD-80(b)):** Workspace disk naming is now ULID-keyed (`<childULID>-workspace.ext4`), making orphaned workspace disks fully visible to and reclaimed by `nexus3 reap`. The create-window hazard is closed by flock leases (D-PD-73 for sandbox create, D-PD-74 for fork children). Named volume backing files remain user-owned and are never auto-deleted; use `nexus3 volume rm` or `nexus3 volume prune` to reclaim them.
 
 ---
 

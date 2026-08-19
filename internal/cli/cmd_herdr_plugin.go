@@ -19,6 +19,7 @@ import (
 	"github.com/newmanchow/nexus3/internal/core/driver"
 	"github.com/newmanchow/nexus3/internal/core/driver/cloudhypervisor"
 	"github.com/newmanchow/nexus3/internal/core/image"
+	"github.com/newmanchow/nexus3/internal/core/perimeter/cred"
 	"github.com/newmanchow/nexus3/internal/core/service"
 	"github.com/newmanchow/nexus3/internal/core/store"
 	"github.com/newmanchow/nexus3/internal/supervisor"
@@ -571,7 +572,7 @@ func buildLaunchBootOpts(imageRef, cacheRoot string, agentEgress bool) service.C
 		ReachabilityTimeout: 60 * time.Second,
 	}
 	if agentEgress {
-		opts.AllowedHosts = service.AgentEgressHosts()
+		opts.AllowedHosts = service.AgentEgressHosts(cred.ClaudeCodeProfile)
 	}
 	return opts
 }

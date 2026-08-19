@@ -1,5 +1,17 @@
 # Parallel-dev flow walkthrough — T0 honest tracer
 
+> **Line references are date-fenced.** Sections dated 2026-08-15 and earlier cite
+> `file.go:NNN` positions as they stood at that day's HEAD; several have since drifted
+> and no longer resolve to the quoted code (verified 2026-08-19). Treat those citations
+> as historical. Two have drifted in **substance**, not just position: `cli/shadowdisk.go`
+> shadow disks are now **handle-namespaced** (`<safeHandle>.shadow.<name>.ext4`,
+> `cli/shadowdisk.go:117`), so the earlier claims that shadow-disk paths carry no sandbox
+> identity and that parallel boot is therefore impossible are **superseded** — see the
+> resource-lifecycle inventory for current behaviour. `kernelPathFor` is now at
+> `cmd_sandbox.go:1549`, not `:1189`. Sections dated 2026-08-19 were verified against
+> HEAD on that date.
+
+
 **Date:** 2026-08-15  
 **Motive:** nexus3-parallel-dev-pr-flow  
 **Target project:** ~/magic/hanlun-lms (git@github.com:oursky/hanlun-lms.git)  
@@ -659,3 +671,57 @@ The error burns 28 seconds of workspace capture before failing. There's no menti
 | `nexus3 up <motive> --count N` | NOT BUILT (M3 slice, Wave 2) |
 | `nexus3 bundle <motive> --out <dir>` | NOT BUILT (G2 slice, Wave 3) |
 | `nexus3 pr <motive>` | NOT BUILT (P1 slice, Wave 4) |
+
+---
+
+## S1-AC2 gate attempt — 2026-08-19 (live, KVM)
+
+The gate was previously unattemptable: the image store held zero images. It was
+unblocked by building the base image with `images/kernel/rebuild-base.sh --image`
+(docker multi-stage build → 6 GiB ext4 → registered in the production cache).
+
+**Condition (a) — named-volume mounts in ≥2 concurrent sandboxes: MET.**
+Two volumes (`qa-vol1`, `qa-vol2`) were created and attached to two sandboxes
+launched concurrently. `sandbox list --json` showed both in `state: running` at
+the same instant, and each guest exposed its volume as `/dev/vdb`.
+
+A same-volume variant was also exercised: two sandboxes attaching **one**
+disk-kind volume. The second was refused —
+
+```
+rw conflict: sandbox sb-06G1FF2XVSR09CZ5KRP66GZ35M create is in flight (intent lease held)
+```
+
+This is the D-PD-93 attach guard behaving correctly: disk-kind volumes are
+single-writer. "Two concurrent named-volume sandboxes" therefore means one
+distinct volume per sandbox, not one shared volume. The refusal message is
+however **misleading** — it attributes the conflict to an in-flight create and a
+held intent lease, when the real reason is that the volume is already attached
+read-write. See TBD-PD-21.
+
+**Condition (b) — in-guest agent reaches the Anthropic API: NOT ATTEMPTED.**
+Operator-gated. Seeding credentials requires an interactive
+`nexus3 auth login --force` run from a dedicated Claude session (not the main
+login, which rotates and logs the operator out). No agent obtained, fabricated,
+or used credentials. This condition remains open and is the sole blocker on
+declaring S1-AC2 met.
+
+**Condition (c) — zero new orphans: MET.**
+Verified independently of the executing agent, by mtime rather than by ID
+prefix. After teardown (`sandbox list` → `0 sandbox(es)`, `volume ls` → `no
+volumes`), `nexus3 reap` reported ~54 orphans at time of run, **all of kind `.raw`**. No file in
+`~/.local/state/nexus3/disks/` or `/run/user/1003/nexus3/` has an mtime inside
+the live-run window (the newest orphan predates it by ~12 minutes). Zero disk
+and zero socket resources were stranded by this flow.
+
+`ResourceIndex` enumerates `.iid` files as `KindSocketIID` (`resource_index.go:174-176`) and `clearState()` (`driver.go:484`) removes the `.iid` file on driver stop. Yet `/run/user/1003/nexus3/` still holds `.iid`/`.vsock`/`.sock` triples dated 08-14 through 08-16 for long-dead sandboxes with no store record, and `reap` reports zero socket-kind orphans. Why the reaper classifies no socket resources despite `ResourceIndex` enumerating them is unresolved and tracked as an open question for R1.
+
+**Defect found — `sandbox rm` leaves a stale volume attachment.**
+After both sandboxes were removed, `volume rm qa-vol1` failed with
+`volume in use: attached to sb-06G1FF2XVSR09CZ5KRP66GZ35M` — a sandbox that no
+longer exists. Removal required `volume prune --apply --include-detached`.
+`prune`'s dry-run correctly classified the volumes as detached, so the stale
+attachment record blocks `volume rm` specifically. See TBD-PD-22.
+
+**Gate verdict: NOT MET.** Two of three conditions are met with recorded
+evidence; (b) is operator-gated. TBR-PD-15 and TBR-PD-18 remain blocked.

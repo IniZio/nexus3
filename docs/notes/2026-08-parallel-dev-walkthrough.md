@@ -10,6 +10,11 @@
 > resource-lifecycle inventory for current behaviour. `kernelPathFor` is now at
 > `cmd_sandbox.go:1549`, not `:1189`. Sections dated 2026-08-19 were verified against
 > HEAD on that date.
+>
+> **`nexus3 up` no longer exists (2026-08-20, D-PD-124).** Every reference below to the
+> M3 slice, to `nexus3 up <motive> --count N`, or to that verb being "NOT BUILT / Wave 2"
+> describes a planned command that was built, found not to do what it claimed, and then
+> deleted. Batch creation is herdr's job or a shell loop over `nexus3 sandbox create`.
 
 
 **Date:** 2026-08-15  

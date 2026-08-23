@@ -26,8 +26,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/service"
 )
 
 func TestReap_NeverTouchesVolumes(t *testing.T) {

@@ -29,8 +29,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/store"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/store"
 )
 
 func TestMountedVolumes_FilestoreRoundTrip(t *testing.T) {

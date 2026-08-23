@@ -67,9 +67,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/service"
-	"github.com/newmanchow/nexus3/internal/core/store"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/store"
 )
 
 // ownershipLedger tracks, for each sandbox ID, the instant its store record

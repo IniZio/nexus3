@@ -15,9 +15,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/service"
-	"github.com/newmanchow/nexus3/internal/core/store"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/store"
 )
 
 // createSparseFile creates a sparse file with the given apparent size. Only the

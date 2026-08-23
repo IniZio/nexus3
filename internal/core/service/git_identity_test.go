@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/perimeter/cred"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/perimeter/cred"
 )
 
 // ── Host identity resolution ──────────────────────────────────────────────────

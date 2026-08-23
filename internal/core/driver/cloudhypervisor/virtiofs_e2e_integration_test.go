@@ -46,13 +46,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/agent"
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/driver"
-	driverfake "github.com/newmanchow/nexus3/internal/core/driver/fake"
-	"github.com/newmanchow/nexus3/internal/core/lifecycle"
-	"github.com/newmanchow/nexus3/internal/core/service"
-	"github.com/newmanchow/nexus3/internal/core/store"
+	"github.com/IniZio/nexus3/internal/core/agent"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/driver"
+	driverfake "github.com/IniZio/nexus3/internal/core/driver/fake"
+	"github.com/IniZio/nexus3/internal/core/lifecycle"
+	"github.com/IniZio/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/store"
 )
 
 const e2eVirtiofsdBin = "/home/newman/.local/bin/virtiofsd"

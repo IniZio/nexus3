@@ -46,7 +46,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/resize"
+	"github.com/IniZio/nexus3/internal/core/resize"
 )
 
 // Disk axis control-law constants.

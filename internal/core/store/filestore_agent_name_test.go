@@ -21,8 +21,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/perimeter/cred"
-	"github.com/newmanchow/nexus3/internal/core/store"
+	"github.com/IniZio/nexus3/internal/core/perimeter/cred"
+	"github.com/IniZio/nexus3/internal/core/store"
 )
 
 func TestAgentName_FilestoreRoundTrip(t *testing.T) {

@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/newmanchow/nexus3/internal/core/agent/agentpb"
+	"github.com/IniZio/nexus3/internal/core/agent/agentpb"
 )
 
 const ringCapacity = defaultRingCap // 16 MiB per session

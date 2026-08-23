@@ -42,15 +42,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/agent"
-	"github.com/newmanchow/nexus3/internal/core/builder"
-	cloudhypervisor "github.com/newmanchow/nexus3/internal/core/driver/cloudhypervisor"
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/driver"
-	"github.com/newmanchow/nexus3/internal/core/image"
-	"github.com/newmanchow/nexus3/internal/core/lifecycle"
-	"github.com/newmanchow/nexus3/internal/core/service"
-	"github.com/newmanchow/nexus3/internal/core/store"
+	"github.com/IniZio/nexus3/internal/core/agent"
+	"github.com/IniZio/nexus3/internal/core/builder"
+	cloudhypervisor "github.com/IniZio/nexus3/internal/core/driver/cloudhypervisor"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/driver"
+	"github.com/IniZio/nexus3/internal/core/image"
+	"github.com/IniZio/nexus3/internal/core/lifecycle"
+	"github.com/IniZio/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/store"
 )
 
 // diskBootCmdlineBaseSF is the kernel command line prefix for disk-boot

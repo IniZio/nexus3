@@ -38,11 +38,11 @@ import (
 	"testing"
 
 	"github.com/cucumber/godog"
-	"github.com/newmanchow/nexus3/internal/cli"
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/service"
-	"github.com/newmanchow/nexus3/internal/core/store"
-	testharness "github.com/newmanchow/nexus3/internal/test/harness"
+	"github.com/IniZio/nexus3/internal/cli"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/store"
+	testharness "github.com/IniZio/nexus3/internal/test/harness"
 )
 
 // ── per-scenario state ────────────────────────────────────────────────────────

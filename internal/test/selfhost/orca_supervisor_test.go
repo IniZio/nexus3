@@ -34,15 +34,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/builder"
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/driver"
-	"github.com/newmanchow/nexus3/internal/core/driver/cloudhypervisor"
-	"github.com/newmanchow/nexus3/internal/core/image"
-	"github.com/newmanchow/nexus3/internal/core/lifecycle"
-	"github.com/newmanchow/nexus3/internal/core/service"
-	"github.com/newmanchow/nexus3/internal/core/store"
-	"github.com/newmanchow/nexus3/internal/supervisor"
+	"github.com/IniZio/nexus3/internal/core/builder"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/driver"
+	"github.com/IniZio/nexus3/internal/core/driver/cloudhypervisor"
+	"github.com/IniZio/nexus3/internal/core/image"
+	"github.com/IniZio/nexus3/internal/core/lifecycle"
+	"github.com/IniZio/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/store"
+	"github.com/IniZio/nexus3/internal/supervisor"
 )
 
 // TestOrcaSupervisorWiring is the S2 acceptance proof. It mirrors orcaCreate's

@@ -9,13 +9,13 @@ import (
 	"time"
 
 	gosdk "github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/driver"
-	"github.com/newmanchow/nexus3/internal/core/driver/cloudhypervisor"
-	"github.com/newmanchow/nexus3/internal/core/image"
-	"github.com/newmanchow/nexus3/internal/core/service"
-	"github.com/newmanchow/nexus3/internal/core/store"
-	mcpsrv "github.com/newmanchow/nexus3/internal/mcp"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/driver"
+	"github.com/IniZio/nexus3/internal/core/driver/cloudhypervisor"
+	"github.com/IniZio/nexus3/internal/core/image"
+	"github.com/IniZio/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/store"
+	mcpsrv "github.com/IniZio/nexus3/internal/mcp"
 )
 
 func init() {

@@ -48,10 +48,10 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/driver"
-	"github.com/newmanchow/nexus3/internal/core/driver/cloudhypervisor"
-	"github.com/newmanchow/nexus3/internal/core/perimeter"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/driver"
+	"github.com/IniZio/nexus3/internal/core/driver/cloudhypervisor"
+	"github.com/IniZio/nexus3/internal/core/perimeter"
 )
 
 // ── defaults ──────────────────────────────────────────────────────────────────

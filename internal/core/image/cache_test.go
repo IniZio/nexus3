@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/image"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/image"
 )
 
 // digestOf computes the sha256 digest of content and returns a domain.Digest.

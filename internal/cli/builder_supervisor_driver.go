@@ -38,11 +38,11 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/driver"
-	"github.com/newmanchow/nexus3/internal/core/driver/cloudhypervisor"
-	"github.com/newmanchow/nexus3/internal/core/vmcfg"
-	"github.com/newmanchow/nexus3/internal/supervisor"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/driver"
+	"github.com/IniZio/nexus3/internal/core/driver/cloudhypervisor"
+	"github.com/IniZio/nexus3/internal/core/vmcfg"
+	"github.com/IniZio/nexus3/internal/supervisor"
 )
 
 // supervisorBuilderDriver implements builder.BuilderDriver by delegating VM

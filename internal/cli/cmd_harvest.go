@@ -5,7 +5,7 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/newmanchow/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/service"
 )
 
 // harvestErrCodePartialFailure is emitted when HarvestMotive succeeds for some

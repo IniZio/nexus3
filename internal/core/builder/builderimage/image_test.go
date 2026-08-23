@@ -19,7 +19,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 
-	"github.com/newmanchow/nexus3/internal/core/builder/builderimage"
+	"github.com/IniZio/nexus3/internal/core/builder/builderimage"
 )
 
 // fakeAgentBytes is a minimal placeholder for the nexus3-agent binary in tests.

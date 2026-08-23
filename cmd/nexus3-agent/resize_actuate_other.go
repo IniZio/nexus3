@@ -11,7 +11,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/resize"
+	"github.com/IniZio/nexus3/internal/core/resize"
 )
 
 // collectSample returns a minimal Sample with only Timestamp populated. PSI,

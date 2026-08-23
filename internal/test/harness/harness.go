@@ -10,11 +10,11 @@
 package harness
 
 import (
-	"github.com/newmanchow/nexus3/internal/core/driver/fake"
-	"github.com/newmanchow/nexus3/internal/core/lifecycle"
-	"github.com/newmanchow/nexus3/internal/core/recovery"
-	"github.com/newmanchow/nexus3/internal/core/service"
-	"github.com/newmanchow/nexus3/internal/core/store"
+	"github.com/IniZio/nexus3/internal/core/driver/fake"
+	"github.com/IniZio/nexus3/internal/core/lifecycle"
+	"github.com/IniZio/nexus3/internal/core/recovery"
+	"github.com/IniZio/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/store"
 )
 
 // Harness holds the wired-together core components for a single test scenario.

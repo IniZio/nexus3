@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/service"
 )
 
 // ipcStopPath is the HTTP path for the graceful-stop request.

@@ -22,5 +22,5 @@ Modifications made for nexus3:
   - gate.go and gate_test.go were NOT copied (interactive hold/resolve not needed).
   - The Gate field, EnableInteractive(), Gate() method, and gate-consultation
     path were removed from acl.go; ErrUnknownDecision was removed (gate-only).
-  - Package is placed under github.com/newmanchow/nexus3 module.
+  - Package is placed under github.com/IniZio/nexus3 module.
   - Test helpers rewritten using stdlib testing only (no testify dependency).

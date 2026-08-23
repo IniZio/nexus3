@@ -25,8 +25,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/driver"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/driver"
 )
 
 // guestCID is the vsock CID assigned to every sandbox VM. Because each

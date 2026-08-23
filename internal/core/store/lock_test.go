@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/store"
+	"github.com/IniZio/nexus3/internal/core/store"
 )
 
 // TestHelperHoldsLock is a subprocess helper: when NEXUS3_TEST_LOCK_HELPER=1 it

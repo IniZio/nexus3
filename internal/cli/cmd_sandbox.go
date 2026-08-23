@@ -16,22 +16,22 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/agent"
-	"github.com/newmanchow/nexus3/internal/core/builder"
-	"github.com/newmanchow/nexus3/internal/core/builder/builderimage"
-	"github.com/newmanchow/nexus3/internal/core/config"
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/driver"
-	"github.com/newmanchow/nexus3/internal/core/driver/cloudhypervisor"
-	"github.com/newmanchow/nexus3/internal/core/image"
-	"github.com/newmanchow/nexus3/internal/core/lifecycle"
-	"github.com/newmanchow/nexus3/internal/core/perimeter/cred"
-	"github.com/newmanchow/nexus3/internal/core/resize"
-	"github.com/newmanchow/nexus3/internal/core/service"
-	"github.com/newmanchow/nexus3/internal/core/store"
-	"github.com/newmanchow/nexus3/internal/core/vmcfg"
-	"github.com/newmanchow/nexus3/internal/core/volumestore"
-	"github.com/newmanchow/nexus3/internal/supervisor"
+	"github.com/IniZio/nexus3/internal/core/agent"
+	"github.com/IniZio/nexus3/internal/core/builder"
+	"github.com/IniZio/nexus3/internal/core/builder/builderimage"
+	"github.com/IniZio/nexus3/internal/core/config"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/driver"
+	"github.com/IniZio/nexus3/internal/core/driver/cloudhypervisor"
+	"github.com/IniZio/nexus3/internal/core/image"
+	"github.com/IniZio/nexus3/internal/core/lifecycle"
+	"github.com/IniZio/nexus3/internal/core/perimeter/cred"
+	"github.com/IniZio/nexus3/internal/core/resize"
+	"github.com/IniZio/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/store"
+	"github.com/IniZio/nexus3/internal/core/vmcfg"
+	"github.com/IniZio/nexus3/internal/core/volumestore"
+	"github.com/IniZio/nexus3/internal/supervisor"
 )
 
 func init() {
@@ -2201,9 +2201,21 @@ func runSandboxRmFull(ctx context.Context, args []string, out *Output, svc *serv
 	}
 
 	// Tear down the herdr space binding if one exists for this sandbox.
-	// Non-fatal: sandbox removal already succeeded.
+	// Non-fatal: sandbox removal already succeeded; sandboxAlreadyRemoved skips svcRemove.
 	if target != nil && storeRoot != "" {
-		herdrSpaceTeardownOnRm(ctx, storeRoot, closeWorkspace, target.Handle(), target.ID.String())
+		deps := txnDeps{
+			workspaceClose: func(ctx context.Context, wsID string) error {
+				return closeWorkspace(ctx, wsID)
+			},
+			bindingDelete: func(ctx context.Context, label string) error {
+				return HerdrSpaceDelete(ctx, storeRoot, label)
+			},
+		}
+		_ = herdrSpaceTeardown(ctx, storeRoot, target.Handle(), deps, teardownOpts{
+			expectedSandboxID:     target.ID.String(),
+			sandboxAlreadyRemoved: true,
+			failOpen:              true,
+		})
 	}
 
 	id := ref

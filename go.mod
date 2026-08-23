@@ -1,4 +1,4 @@
-module github.com/newmanchow/nexus3
+module github.com/IniZio/nexus3
 
 go 1.25.5
 

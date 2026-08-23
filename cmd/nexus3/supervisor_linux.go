@@ -9,9 +9,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/resize"
-	"github.com/newmanchow/nexus3/internal/supervisor"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/resize"
+	"github.com/IniZio/nexus3/internal/supervisor"
 )
 
 // supervisorExtraDisks is a flag.Value implementation that accumulates

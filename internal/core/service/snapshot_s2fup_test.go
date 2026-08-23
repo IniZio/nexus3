@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/artifact"
-	"github.com/newmanchow/nexus3/internal/core/driver/fake"
-	"github.com/newmanchow/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/artifact"
+	"github.com/IniZio/nexus3/internal/core/driver/fake"
+	"github.com/IniZio/nexus3/internal/core/service"
 )
 
 // makeSnap writes a minimal retained snapshot record to st and returns the snap.

@@ -24,7 +24,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/domain"
 )
 
 // RunState is the actual execution state of a VM as reported by the

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/perimeter/cred"
+	"github.com/IniZio/nexus3/internal/core/perimeter/cred"
 )
 
 // TestS0_ProfileStoreToken is the end-to-end S0 tracer test: it loads a

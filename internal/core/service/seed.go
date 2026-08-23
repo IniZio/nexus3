@@ -18,10 +18,10 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/newmanchow/nexus3/internal/core/agent"
-	"github.com/newmanchow/nexus3/internal/core/agent/agentpb"
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/perimeter/cred"
+	"github.com/IniZio/nexus3/internal/core/agent"
+	"github.com/IniZio/nexus3/internal/core/agent/agentpb"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/perimeter/cred"
 )
 
 // GuestCredEnvPath is the well-known path inside the guest where the credential

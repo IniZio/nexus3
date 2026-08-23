@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/newmanchow/nexus3/internal/core/agent"
-	"github.com/newmanchow/nexus3/internal/core/image"
+	"github.com/IniZio/nexus3/internal/core/agent"
+	"github.com/IniZio/nexus3/internal/core/image"
 )
 
 // RunEphemeral creates a sandbox, runs a command in it, removes the sandbox,

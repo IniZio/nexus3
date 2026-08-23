@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/service"
 )
 
 // TBD-PD-39. `nexus3 stop` on a sandbox with a detached supervisor announced

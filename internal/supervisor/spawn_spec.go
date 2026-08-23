@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/domain"
 )
 
 // SpecFile is the durable spawn.json name written next to supervisor.pid.

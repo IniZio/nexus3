@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/newmanchow/nexus3/docs/schema/nexus3.schema.json",
+  "$id": "https://github.com/IniZio/nexus3/docs/schema/nexus3.schema.json",
   "title": "nexus3.yaml",
   "description": "Per-repository nexus3 configuration file. Add `# yaml-language-server: $schema=<path-to-repo-root>/docs/schema/nexus3.schema.json` as the first line of nexus3.yaml for editor autocomplete and validation.",
   "type": "object",

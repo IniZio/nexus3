@@ -13,8 +13,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/builder"
-	"github.com/newmanchow/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/builder"
+	"github.com/IniZio/nexus3/internal/core/domain"
 )
 
 // capturingBuilderStore keeps every record as it was CREATED. The real flow

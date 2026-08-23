@@ -15,10 +15,10 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/perimeter"
-	"github.com/newmanchow/nexus3/internal/core/perimeter/netfilter"
-	"github.com/newmanchow/nexus3/internal/core/perimeter/netstack"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/perimeter"
+	"github.com/IniZio/nexus3/internal/core/perimeter/netfilter"
+	"github.com/IniZio/nexus3/internal/core/perimeter/netstack"
 )
 
 // TestAllowAll_NilProxy_NoCACert_NoMitmAddr asserts that when perimeter.Start

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/config"
+	"github.com/IniZio/nexus3/internal/core/config"
 )
 
 // writeYaml writes a nexus3.yaml to dir and returns the file path.

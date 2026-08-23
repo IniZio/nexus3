@@ -9,8 +9,8 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/store"
-	"github.com/newmanchow/nexus3/internal/core/volumestore"
+	"github.com/IniZio/nexus3/internal/core/store"
+	"github.com/IniZio/nexus3/internal/core/volumestore"
 )
 
 func init() {

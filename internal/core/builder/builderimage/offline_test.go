@@ -30,7 +30,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/builder/builderimage"
+	"github.com/IniZio/nexus3/internal/core/builder/builderimage"
 )
 
 // fakeAgentBytesOffline is a minimal non-empty agent binary placeholder.

@@ -5,8 +5,8 @@ import (
 	"io"
 	"net"
 
-	"github.com/newmanchow/nexus3/internal/core/artifact"
-	"github.com/newmanchow/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/artifact"
+	"github.com/IniZio/nexus3/internal/core/domain"
 )
 
 // AgentControlPort is the fixed vsock port number the guest agent listens on

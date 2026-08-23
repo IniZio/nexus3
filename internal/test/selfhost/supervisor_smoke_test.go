@@ -37,16 +37,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/agent"
-	"github.com/newmanchow/nexus3/internal/core/builder"
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/driver"
-	"github.com/newmanchow/nexus3/internal/core/driver/cloudhypervisor"
-	"github.com/newmanchow/nexus3/internal/core/image"
-	"github.com/newmanchow/nexus3/internal/core/lifecycle"
-	"github.com/newmanchow/nexus3/internal/core/service"
-	"github.com/newmanchow/nexus3/internal/core/store"
-	"github.com/newmanchow/nexus3/internal/supervisor"
+	"github.com/IniZio/nexus3/internal/core/agent"
+	"github.com/IniZio/nexus3/internal/core/builder"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/driver"
+	"github.com/IniZio/nexus3/internal/core/driver/cloudhypervisor"
+	"github.com/IniZio/nexus3/internal/core/image"
+	"github.com/IniZio/nexus3/internal/core/lifecycle"
+	"github.com/IniZio/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/store"
+	"github.com/IniZio/nexus3/internal/supervisor"
 )
 
 // buildNexus3Bin compiles cmd/nexus3 as a native Linux binary and returns its
@@ -59,7 +59,7 @@ func buildNexus3Bin(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("buildNexus3Bin: findRepoRoot: %v", err)
 	}
-	cmd := exec.Command("go", "build", "-o", bin, "github.com/newmanchow/nexus3/cmd/nexus3")
+	cmd := exec.Command("go", "build", "-o", bin, "github.com/IniZio/nexus3/cmd/nexus3")
 	cmd.Dir = repoR
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 	if out, err := cmd.CombinedOutput(); err != nil {

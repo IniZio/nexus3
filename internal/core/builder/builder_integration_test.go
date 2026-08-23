@@ -50,11 +50,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/agent"
-	"github.com/newmanchow/nexus3/internal/core/builder"
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/driver"
-	"github.com/newmanchow/nexus3/internal/core/image"
+	"github.com/IniZio/nexus3/internal/core/agent"
+	"github.com/IniZio/nexus3/internal/core/builder"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/driver"
+	"github.com/IniZio/nexus3/internal/core/image"
 )
 
 // ── constants ─────────────────────────────────────────────────────────────────
@@ -121,7 +121,7 @@ func buildNexus3Agent(t *testing.T) string {
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "nexus3-agent")
 	cmd := exec.Command("go", "build", "-o", bin,
-		"github.com/newmanchow/nexus3/cmd/nexus3-agent")
+		"github.com/IniZio/nexus3/cmd/nexus3-agent")
 	cmd.Dir = repoRoot(t)
 	cmd.Env = append(os.Environ(),
 		"CGO_ENABLED=0",

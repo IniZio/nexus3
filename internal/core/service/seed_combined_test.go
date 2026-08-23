@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/perimeter/cred"
+	"github.com/IniZio/nexus3/internal/core/perimeter/cred"
 )
 
 // TestSeedGuestAgentAndSecrets_ContainsBothCredSets is the primary mutation

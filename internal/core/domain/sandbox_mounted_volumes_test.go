@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/domain"
 )
 
 // TestMountedVolumes_PreChangeJSON proves that a sandbox record serialised

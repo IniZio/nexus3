@@ -20,7 +20,7 @@
 // a first-class state, not a transient marker.
 package lifecycle
 
-import "github.com/newmanchow/nexus3/internal/core/domain"
+import "github.com/IniZio/nexus3/internal/core/domain"
 
 // Trigger names the event that causes a state transition.
 type Trigger string

@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/store"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/store"
 )
 
 // ReapStatus classifies a host resource for reclamation purposes.

@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/agent"
+	"github.com/IniZio/nexus3/internal/core/agent"
 )
 
 func TestParseWorkspaceMountArg_Valid(t *testing.T) {

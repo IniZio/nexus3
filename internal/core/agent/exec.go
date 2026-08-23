@@ -6,8 +6,8 @@ import (
 	"io"
 	"sync"
 
-	"github.com/newmanchow/nexus3/internal/core/agent/agentpb"
-	"github.com/newmanchow/nexus3/internal/core/agent/wire"
+	"github.com/IniZio/nexus3/internal/core/agent/agentpb"
+	"github.com/IniZio/nexus3/internal/core/agent/wire"
 )
 
 // ExecOptions configures an [Client.Exec] call.

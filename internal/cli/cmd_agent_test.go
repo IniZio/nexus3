@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/agent/agentpb"
-	"github.com/newmanchow/nexus3/internal/core/lifecycle"
-	"github.com/newmanchow/nexus3/internal/core/service"
-	"github.com/newmanchow/nexus3/internal/core/store"
+	"github.com/IniZio/nexus3/internal/core/agent/agentpb"
+	"github.com/IniZio/nexus3/internal/core/lifecycle"
+	"github.com/IniZio/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/store"
 )
 
 // ── helpers ───────────────────────────────────────────────────────────────────

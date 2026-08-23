@@ -13,8 +13,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/image"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/image"
 )
 
 // BuildFingerprint computes a stable hex SHA-256 fingerprint over the four

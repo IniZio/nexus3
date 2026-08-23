@@ -9,7 +9,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/newmanchow/nexus3/internal/core/agent/agentpb"
+	"github.com/IniZio/nexus3/internal/core/agent/agentpb"
 )
 
 // Agent is the nexus3 in-guest PID-1 agent.

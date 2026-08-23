@@ -3,7 +3,7 @@ package cred_test
 import (
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/perimeter/cred"
+	"github.com/IniZio/nexus3/internal/core/perimeter/cred"
 )
 
 func TestClaudeCodeProfile_Fields(t *testing.T) {

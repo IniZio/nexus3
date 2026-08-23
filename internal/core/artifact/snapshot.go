@@ -15,7 +15,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/domain"
 )
 
 // SnapshotID uniquely identifies a snapshot artifact. It is opaque to callers.

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/store"
+	"github.com/IniZio/nexus3/internal/core/store"
 )
 
 // TBD-PD-37, idempotency half. A resource that vanished between enumeration

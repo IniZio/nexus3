@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/artifact"
+	"github.com/IniZio/nexus3/internal/core/artifact"
 )
 
 // TestVMSnapshotRequest_JSON verifies that vmSnapshotRequest marshals to the

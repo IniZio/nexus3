@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package nexus3.agent.v1;
 
-option go_package = "github.com/newmanchow/nexus3/internal/core/agent/agentpb;agentpb";
+option go_package = "github.com/IniZio/nexus3/internal/core/agent/agentpb;agentpb";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared types

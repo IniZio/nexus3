@@ -17,7 +17,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/domain"
 )
 
 // Policy is the per-sandbox egress allowlist. It describes which destinations

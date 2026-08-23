@@ -44,7 +44,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/domain"
 )
 
 // currentMetaVersion is the schema version written into meta.json.

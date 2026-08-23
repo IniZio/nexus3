@@ -29,7 +29,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/domain"
 )
 
 // TestMain checks the netns re-exec sentinel before running tests.

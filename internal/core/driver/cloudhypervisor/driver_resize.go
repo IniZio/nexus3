@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"syscall"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/resize"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/resize"
 )
 
 // SandboxResizer implements [resize.MemoryResizer], [resize.CPUResizer], and

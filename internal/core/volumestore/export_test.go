@@ -3,7 +3,7 @@ package volumestore
 import (
 	"context"
 
-	"github.com/newmanchow/nexus3/internal/core/store"
+	"github.com/IniZio/nexus3/internal/core/store"
 )
 
 // SetTestHookAfterMetaWrite sets the hook that fires after meta.json is

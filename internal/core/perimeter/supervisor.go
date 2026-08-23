@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/perimeter/mitm"
-	"github.com/newmanchow/nexus3/internal/core/perimeter/netfilter"
-	"github.com/newmanchow/nexus3/internal/core/perimeter/sni"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/perimeter/mitm"
+	"github.com/IniZio/nexus3/internal/core/perimeter/netfilter"
+	"github.com/IniZio/nexus3/internal/core/perimeter/sni"
 )
 
 // dialerSetter is an optional interface a Perimeter implementation may satisfy

@@ -53,7 +53,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/driver"
+	"github.com/IniZio/nexus3/internal/core/driver"
 )
 
 func TestCHDiskLockProbe(t *testing.T) {

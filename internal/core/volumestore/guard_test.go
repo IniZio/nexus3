@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/volumestore"
+	"github.com/IniZio/nexus3/internal/core/volumestore"
 )
 
 // AttachAndPrune tests

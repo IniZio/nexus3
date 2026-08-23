@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	corestore "github.com/newmanchow/nexus3/internal/core/store"
+	corestore "github.com/IniZio/nexus3/internal/core/store"
 )
 
 // ErrStoreAbsent is returned by [LoadStore] when the store file does not exist.

@@ -9,7 +9,7 @@ import (
 
 // version is the build version string. It is overridden at link time via:
 //
-//	go build -ldflags "-X github.com/newmanchow/nexus3/internal/cli.version=1.2.3"
+//	go build -ldflags "-X github.com/IniZio/nexus3/internal/cli.version=1.2.3"
 var version = "0.0.0-dev"
 
 func init() {

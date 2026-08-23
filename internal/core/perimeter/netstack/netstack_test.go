@@ -15,9 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/perimeter"
-	"github.com/newmanchow/nexus3/internal/core/perimeter/netfilter"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/perimeter"
+	"github.com/IniZio/nexus3/internal/core/perimeter/netfilter"
 )
 
 // TestMain skips the entire package when running inside the nexus3 guest VM.

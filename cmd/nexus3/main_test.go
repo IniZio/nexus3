@@ -35,7 +35,7 @@ func TestMain_Argv0GuestShellDispatch(t *testing.T) {
 
 	// Build the binary. This exercises the full link step so the test covers
 	// the exact binary that runs in production, not a surrogate.
-	build := exec.Command("go", "build", "-o", binPath, "github.com/newmanchow/nexus3/cmd/nexus3")
+	build := exec.Command("go", "build", "-o", binPath, "github.com/IniZio/nexus3/cmd/nexus3")
 	build.Env = append(os.Environ(), "CGO_ENABLED=0")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)

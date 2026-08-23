@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	gosdk "github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/newmanchow/nexus3/internal/mcp"
+	"github.com/IniZio/nexus3/internal/mcp"
 )
 
 // TestMCPIntegration_stdio builds the nexus3 binary and runs it as an MCP
@@ -29,7 +29,7 @@ func TestMCPIntegration_stdio(t *testing.T) {
 	// ── Build the binary ──────────────────────────────────────────────────────
 	binDir := t.TempDir()
 	binPath := filepath.Join(binDir, "nexus3")
-	build := exec.Command("go", "build", "-o", binPath, "github.com/newmanchow/nexus3/cmd/nexus3")
+	build := exec.Command("go", "build", "-o", binPath, "github.com/IniZio/nexus3/cmd/nexus3")
 	build.Env = append(os.Environ(), "CGO_ENABLED=0")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)

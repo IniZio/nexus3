@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/domain"
 )
 
 // sandboxProbeFn probes one sandbox for live state. It returns the supervisor

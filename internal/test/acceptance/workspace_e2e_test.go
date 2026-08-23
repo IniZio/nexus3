@@ -38,15 +38,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/agent"
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/driver"
-	cloudhypervisor "github.com/newmanchow/nexus3/internal/core/driver/cloudhypervisor"
-	"github.com/newmanchow/nexus3/internal/core/image"
-	"github.com/newmanchow/nexus3/internal/core/lifecycle"
-	"github.com/newmanchow/nexus3/internal/core/recovery"
-	"github.com/newmanchow/nexus3/internal/core/service"
-	"github.com/newmanchow/nexus3/internal/core/store"
+	"github.com/IniZio/nexus3/internal/core/agent"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/driver"
+	cloudhypervisor "github.com/IniZio/nexus3/internal/core/driver/cloudhypervisor"
+	"github.com/IniZio/nexus3/internal/core/image"
+	"github.com/IniZio/nexus3/internal/core/lifecycle"
+	"github.com/IniZio/nexus3/internal/core/recovery"
+	"github.com/IniZio/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/store"
 )
 
 // e2eSunPathMax is the usable sun_path limit for AF_UNIX sockets on Linux.
@@ -156,7 +156,7 @@ func e2eBuildAgent(t *testing.T) string {
 	agentBin := filepath.Join(dir, "nexus3-agent")
 
 	cmd := exec.Command("go", "build", "-o", agentBin,
-		"github.com/newmanchow/nexus3/cmd/nexus3-agent")
+		"github.com/IniZio/nexus3/cmd/nexus3-agent")
 	cmd.Dir = repoRoot
 	cmd.Env = append(os.Environ(),
 		"CGO_ENABLED=0",

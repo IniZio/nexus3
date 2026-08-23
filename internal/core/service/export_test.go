@@ -3,9 +3,9 @@ package service
 import (
 	"context"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/store"
-	"github.com/newmanchow/nexus3/internal/core/volumestore"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/store"
+	"github.com/IniZio/nexus3/internal/core/volumestore"
 )
 
 // ApplyRWVerdictTable is exported for testing only. It implements the §4.1

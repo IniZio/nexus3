@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/resize"
+	"github.com/IniZio/nexus3/internal/core/resize"
 )
 
 // ── Compile-time interface satisfaction ──────────────────────────────────────

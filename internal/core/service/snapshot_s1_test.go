@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/artifact"
-	"github.com/newmanchow/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/artifact"
+	"github.com/IniZio/nexus3/internal/core/service"
 )
 
 // makeArtifactStore creates an artifact.Store in a fresh temp dir.

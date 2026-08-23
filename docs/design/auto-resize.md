@@ -337,9 +337,9 @@ $ TMPDIR=/tmp go build ./...
 (no output — clean build)
 
 $ TMPDIR=/tmp go test ./internal/supervisor/... ./internal/cli/... ./cmd/nexus3-agent/...
-ok   github.com/newmanchow/nexus3/internal/supervisor    0.010s
-ok   github.com/newmanchow/nexus3/internal/cli          31.581s
-ok   github.com/newmanchow/nexus3/cmd/nexus3-agent      (cached)
+ok   github.com/IniZio/nexus3/internal/supervisor    0.010s
+ok   github.com/IniZio/nexus3/internal/cli          31.581s
+ok   github.com/IniZio/nexus3/cmd/nexus3-agent      (cached)
 
 $ TMPDIR=/tmp go test -run TestOrcaSpawnConfig ./internal/cli/... -v
 # 2 passed

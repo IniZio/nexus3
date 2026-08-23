@@ -15,7 +15,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/newmanchow/nexus3/internal/core/builder"
+	"github.com/IniZio/nexus3/internal/core/builder"
 )
 
 const (

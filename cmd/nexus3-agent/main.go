@@ -13,9 +13,9 @@ import (
 	"github.com/mdlayher/vsock"
 	"golang.org/x/sys/unix"
 
-	"github.com/newmanchow/nexus3/internal/core/agent"
-	"github.com/newmanchow/nexus3/internal/core/agent/wire"
-	"github.com/newmanchow/nexus3/internal/core/driver"
+	"github.com/IniZio/nexus3/internal/core/agent"
+	"github.com/IniZio/nexus3/internal/core/agent/wire"
+	"github.com/IniZio/nexus3/internal/core/driver"
 )
 
 // agentBuildTag is stamped at image-build time via:

@@ -35,8 +35,8 @@ import (
 	"fmt"
 
 	gosdk "github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/service"
 )
 
 // SandboxService is the subset of *service.Service consumed by the MCP tools.

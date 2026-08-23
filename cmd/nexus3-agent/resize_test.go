@@ -30,7 +30,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/newmanchow/nexus3/internal/core/resize"
+	"github.com/IniZio/nexus3/internal/core/resize"
 )
 
 // ── helpers ──────────────────────────────────────────────────────────────────

@@ -46,8 +46,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/image"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/image"
 )
 
 // containerfilePath is the workspace-relative path to the project's build

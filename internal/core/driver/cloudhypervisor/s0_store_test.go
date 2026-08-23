@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/artifact"
-	"github.com/newmanchow/nexus3/internal/core/store"
+	"github.com/IniZio/nexus3/internal/core/artifact"
+	"github.com/IniZio/nexus3/internal/core/store"
 )
 
 // newStoreDriver creates a CHDriver backed by a real artifact.Store in a temp

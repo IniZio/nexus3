@@ -5,7 +5,7 @@ import (
 	"flag"
 	"os"
 
-	"github.com/newmanchow/nexus3/internal/core/agent/agentpb"
+	"github.com/IniZio/nexus3/internal/core/agent/agentpb"
 	"golang.org/x/term"
 )
 

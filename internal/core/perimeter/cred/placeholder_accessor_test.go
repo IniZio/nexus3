@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/domain"
 )
 
 // TestBrokerPlaceholder_ReturnsPlaceholderNeverRealToken is the guard for the

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/service"
 )
 
 // ── probe helpers ─────────────────────────────────────────────────────────────

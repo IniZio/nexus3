@@ -10,7 +10,7 @@ package vmcfg
 import (
 	"fmt"
 
-	"github.com/newmanchow/nexus3/internal/core/resize"
+	"github.com/IniZio/nexus3/internal/core/resize"
 )
 
 // Config holds the inputs for resolving VM auto-resize boot configuration.

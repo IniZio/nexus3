@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/diskname"
-	"github.com/newmanchow/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/diskname"
+	"github.com/IniZio/nexus3/internal/core/domain"
 )
 
 // The single most dangerous drift in TBD-PD-38: childShadowPlan predicts where

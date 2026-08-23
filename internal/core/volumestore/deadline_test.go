@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/volumestore"
+	"github.com/IniZio/nexus3/internal/core/volumestore"
 )
 
 // holdLock opens the lock file at path from a SEPARATE file descriptor and

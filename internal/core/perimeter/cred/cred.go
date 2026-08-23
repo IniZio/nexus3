@@ -32,7 +32,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/domain"
 )
 
 // syntheticExpiry is the far-future expiry seeded into every PlaceholderRecord.

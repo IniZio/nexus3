@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/agent"
-	"github.com/newmanchow/nexus3/internal/core/vmcfg"
+	"github.com/IniZio/nexus3/internal/core/agent"
+	"github.com/IniZio/nexus3/internal/core/vmcfg"
 )
 
 func TestGuestBootCmdline_NoMounts(t *testing.T) {

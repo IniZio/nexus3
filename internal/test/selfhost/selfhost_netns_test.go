@@ -15,7 +15,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/driver/cloudhypervisor"
+	"github.com/IniZio/nexus3/internal/core/driver/cloudhypervisor"
 )
 
 // TestMain is the test binary entry point. It dispatches the netns re-exec

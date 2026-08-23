@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/service"
 )
 
 // The manual has documented the flat spelling since D-PD-57, and 53 fenced

@@ -22,7 +22,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/domain"
 )
 
 // vmFsConfig is the JSON representation of a CH virtio-fs device in vm.create.

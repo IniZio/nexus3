@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/govern"
-	"github.com/newmanchow/nexus3/internal/core/resize"
+	"github.com/IniZio/nexus3/internal/core/govern"
+	"github.com/IniZio/nexus3/internal/core/resize"
 )
 
 // testAllResizer is a minimal stub that satisfies resize.MemoryResizer,

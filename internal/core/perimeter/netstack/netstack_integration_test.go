@@ -20,9 +20,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/perimeter"
-	"github.com/newmanchow/nexus3/internal/core/perimeter/netfilter"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/perimeter"
+	"github.com/IniZio/nexus3/internal/core/perimeter/netfilter"
 )
 
 // gatewayHWAddr is the VirtualNetwork gateway MAC (must match netstackGatewayMAC).

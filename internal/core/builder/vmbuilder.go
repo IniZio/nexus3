@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/driver"
-	"github.com/newmanchow/nexus3/internal/core/image"
-	"github.com/newmanchow/nexus3/internal/core/perimeter/netfilter"
-	"github.com/newmanchow/nexus3/internal/core/perimeter/netstack"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/driver"
+	"github.com/IniZio/nexus3/internal/core/image"
+	"github.com/IniZio/nexus3/internal/core/perimeter/netfilter"
+	"github.com/IniZio/nexus3/internal/core/perimeter/netstack"
 )
 
 // BuilderDriver is the subset of driver capabilities required by [BuildInVM].

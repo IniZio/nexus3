@@ -7,7 +7,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/agent/wire"
+	"github.com/IniZio/nexus3/internal/core/agent/wire"
 )
 
 // roundTrip encodes one frame with write and immediately decodes it from the

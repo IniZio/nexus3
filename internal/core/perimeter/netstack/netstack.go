@@ -24,9 +24,9 @@ import (
 	"github.com/containers/gvisor-tap-vsock/pkg/types"
 	"github.com/containers/gvisor-tap-vsock/pkg/virtualnetwork"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/perimeter"
-	"github.com/newmanchow/nexus3/internal/core/perimeter/netfilter"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/perimeter"
+	"github.com/IniZio/nexus3/internal/core/perimeter/netfilter"
 )
 
 // Virtual network address constants for the per-sandbox gvisor stack.

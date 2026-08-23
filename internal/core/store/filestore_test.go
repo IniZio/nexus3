@@ -11,8 +11,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/store"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/store"
 )
 
 // newStore creates a FileStore rooted at a fresh temporary directory.

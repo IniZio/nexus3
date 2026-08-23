@@ -39,10 +39,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/agent"
-	"github.com/newmanchow/nexus3/internal/core/builder"
-	"github.com/newmanchow/nexus3/internal/core/diskname"
-	"github.com/newmanchow/nexus3/internal/core/service"
+	"github.com/IniZio/nexus3/internal/core/agent"
+	"github.com/IniZio/nexus3/internal/core/builder"
+	"github.com/IniZio/nexus3/internal/core/diskname"
+	"github.com/IniZio/nexus3/internal/core/service"
 )
 
 // DefaultShadowDirs is the documented default set of workspace-relative

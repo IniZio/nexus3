@@ -17,7 +17,7 @@ import (
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 
-	"github.com/newmanchow/nexus3/internal/core/builder/builderimage"
+	"github.com/IniZio/nexus3/internal/core/builder/builderimage"
 )
 
 // TestAgentCacheKey_DifferentAgentsDifferentPaths verifies that two calls with

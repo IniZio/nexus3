@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/newmanchow/nexus3/internal/core/perimeter/cred"
+	"github.com/IniZio/nexus3/internal/core/perimeter/cred"
 )
 
 // ── fixture helpers ───────────────────────────────────────────────────────────

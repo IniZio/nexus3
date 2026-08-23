@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/config"
+	"github.com/IniZio/nexus3/internal/core/config"
 )
 
 // ---- Load / parse tests ----

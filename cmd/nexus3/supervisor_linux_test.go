@@ -6,9 +6,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/resize"
-	"github.com/newmanchow/nexus3/internal/supervisor"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/resize"
+	"github.com/IniZio/nexus3/internal/supervisor"
 )
 
 // TestParseSupervisorFlags_RoundTrip pins the flag→struct glue: every

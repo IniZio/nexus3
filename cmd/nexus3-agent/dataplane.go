@@ -7,7 +7,7 @@ import (
 
 	"github.com/creack/pty"
 
-	"github.com/newmanchow/nexus3/internal/core/agent/wire"
+	"github.com/IniZio/nexus3/internal/core/agent/wire"
 )
 
 // serveData accepts connections on the data-plane listener and dispatches

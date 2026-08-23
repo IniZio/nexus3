@@ -68,10 +68,10 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 
-	"github.com/newmanchow/nexus3/internal/core/agent"
-	"github.com/newmanchow/nexus3/internal/core/builder/builderimage"
-	"github.com/newmanchow/nexus3/internal/core/domain"
-	"github.com/newmanchow/nexus3/internal/core/driver"
+	"github.com/IniZio/nexus3/internal/core/agent"
+	"github.com/IniZio/nexus3/internal/core/builder/builderimage"
+	"github.com/IniZio/nexus3/internal/core/domain"
+	"github.com/IniZio/nexus3/internal/core/driver"
 )
 
 // ── constants ────────────────────────────────────────────────────────────────
@@ -484,7 +484,7 @@ func toolchainBuildAgent(t *testing.T) string {
 	repoRoot := toolchainRepoRoot(t)
 	cmd := exec.Command("go", "build",
 		"-o", bin,
-		"github.com/newmanchow/nexus3/cmd/nexus3-agent",
+		"github.com/IniZio/nexus3/cmd/nexus3-agent",
 	)
 	cmd.Dir = repoRoot
 	cmd.Env = append(os.Environ(),

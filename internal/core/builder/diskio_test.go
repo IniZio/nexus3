@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/newmanchow/nexus3/internal/core/image"
+	"github.com/IniZio/nexus3/internal/core/image"
 )
 
 // debugfsAvailable reports whether debugfs is on the host PATH.

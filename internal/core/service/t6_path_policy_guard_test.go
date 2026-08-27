@@ -5,15 +5,20 @@
 // is ALLOWED. Each refusal case is mutation-proven: removing the guard causes the test
 // to fail.
 //
-// Four cases (spec):
-//   (a) github host, no policy       → REFUSED at create, Start, startSupervisor
-//   (b) github host, AllowedRepo set → ALLOWED (shim covers it)
-//   (c) github host, PathPolicies entry for that host → ALLOWED
-//   (d) non-github host, no policy   → ALLOWED (host-only, D-PDE-16 asymmetry)
+// Five cases (spec):
+//   (a) github host, no policy              → REFUSED at create, Start, startSupervisor
+//   (b) github host, AllowedRepo set        → ALLOWED (shim covers it)
+//   (c) github host, PathPolicies "" key    → ALLOWED
+//   (d) non-github host, no policy          → ALLOWED (host-only, D-PDE-16 asymmetry)
+//   (e) github host, PathPolicies bogus key → REFUSED (sole-bound bypass guard)
 //
 // Cases (a) and (b) are already exercised by pre-existing tests; they are
 // re-stated here in the T6 context to make the three-site coverage explicit.
 // Cases (c) and (d) are new (PathPolicies path not previously tested here).
+// Case (e) is the regression for the sole-bound bypass discovered in the
+// provider-agnostic egress audit (D-PD-36-BYPASS): a policy under a non-""
+// top-level key passes an all-keys guard but is never enforced by lookupPolicy
+// because the real placeholder is minted after PathPolicies is frozen.
 
 package service
 
@@ -343,6 +348,107 @@ func TestT6_StartGuard_NonGitHubNoPolicy_Allowed(t *testing.T) {
 		t.Fatalf("Start non-github host: got ErrUnboundGitHubSecret, want no guard error (asymmetry)")
 	}
 }
+
+// ── (e) github host, bogus-key PathPolicies → REFUSED ────────────────────────
+//
+// Case (e) is the regression for the sole-bound bypass (D-PD-36-BYPASS):
+// a policy stored under a non-"" top-level key (e.g. "x") passes an all-keys
+// guard but is NEVER reached by lookupPolicy (which consults pp[placeholder]
+// then pp[""]). The real placeholder is minted AFTER PathPolicies is frozen at
+// create time, so "" is the ONLY key enforcement will ever honour.
+
+// TestT6_CreateGuard_BogusKeyGitHubPolicy_Refused verifies case (e) at
+// CreateAndBoot: a PathPolicies map whose ONLY entry is under a non-"" key
+// (e.g. "x") does NOT satisfy the guard — the github secret is refused as
+// unbounded.
+//
+// Mutation evidence: revert githubHostBoundByPolicy to an all-keys loop →
+// CreateAndBoot returns nil (no error) instead of ErrUnboundGitHubSecret,
+// causing this test to fail.
+func TestT6_CreateGuard_BogusKeyGitHubPolicy_Refused(t *testing.T) {
+	base, cacheRoot := t6ImageOpts(t)
+	cache, _ := image.NewCache(cacheRoot)
+	// Policy is under "x", not ""; enforcement never reaches it.
+	pp := domain.EgressPathPolicies{
+		"x": {"api.github.com": domain.EgressHostPolicy{Paths: []string{"/**"}}},
+	}
+	opts := base
+	opts.Secrets = []SecretBind{{
+		Env:   "GH_TOKEN",
+		Hosts: []string{"api.github.com"},
+		Token: "ghp_test",
+	}}
+	opts.PathPolicies = pp
+	// AllowedRepo: "",  // not set
+
+	_, err := CreateAndBoot(
+		context.Background(),
+		newTestSvc(t, fake.New()),
+		cache,
+		func(_ string, _ []ExtraDisk) (driver.Driver, error) { return fake.New(), nil },
+		noopProbe,
+		"proj", "t6-bogus-key-create",
+		opts,
+	)
+	if !errors.Is(err, ErrUnboundGitHubSecret) {
+		t.Fatalf("CreateAndBoot with bogus-key PathPolicies: got %v, want ErrUnboundGitHubSecret", err)
+	}
+}
+
+// TestT6_StartGuard_BogusKeyGitHubPolicy_Refused verifies case (e) at Start.
+//
+// Mutation evidence: revert githubHostBoundByPolicy to an all-keys loop →
+// Start returns nil instead of ErrUnboundGitHubSecret.
+func TestT6_StartGuard_BogusKeyGitHubPolicy_Refused(t *testing.T) {
+	pp := domain.EgressPathPolicies{
+		"x": {"api.github.com": domain.EgressHostPolicy{Paths: []string{"/**"}}},
+	}
+	sb := domain.Sandbox{
+		ID:      domain.NewSandboxID(),
+		Name:    "t6-bogus-key-start",
+		Project: "test",
+		State:   domain.Stopped,
+		Envelope: domain.Envelope{
+			ImageDigest:  "sha256:deadbeef",
+			SecretHosts:  []string{"api.github.com"},
+			PathPolicies: pp, // bogus key — never enforced
+		},
+	}
+	svc := New(t6SeedStore(t, sb), fake.New(), lifecycle.New())
+	_, err := svc.Start(context.Background(), sb.ID.String())
+	if !errors.Is(err, ErrUnboundGitHubSecret) {
+		t.Fatalf("Start with bogus-key PathPolicies: got %v, want ErrUnboundGitHubSecret", err)
+	}
+}
+
+// TestT6_SupervisorGuard_BogusKeyGitHubPolicy_Refused verifies case (e) at
+// startSupervisor.
+//
+// Mutation evidence: revert githubHostBoundByPolicy to an all-keys loop →
+// startSupervisor no longer returns ErrUnboundGitHubSecret.
+func TestT6_SupervisorGuard_BogusKeyGitHubPolicy_Refused(t *testing.T) {
+	hook, hostConn := newT6NetHook()
+	defer hostConn.Close()
+
+	svc := newTestSvc(t, hook)
+	pp := domain.EgressPathPolicies{
+		"x": {"api.github.com": domain.EgressHostPolicy{Paths: []string{"/**"}}},
+	}
+	sb := domain.Sandbox{
+		ID:      domain.NewSandboxID(),
+		Project: "test",
+		Envelope: domain.Envelope{
+			SecretHosts:  []string{"api.github.com"},
+			PathPolicies: pp, // bogus key — never enforced
+		},
+	}
+	err := svc.startSupervisor(context.Background(), hook, sb)
+	if !errors.Is(err, ErrUnboundGitHubSecret) {
+		t.Fatalf("startSupervisor with bogus-key PathPolicies: got %v, want ErrUnboundGitHubSecret", err)
+	}
+}
+
+// ── (d) non-github host, no policy → ALLOWED (asymmetry) ─────────────────────
 
 // TestT6_SupervisorGuard_NonGitHubNoPolicy_Allowed verifies case (d) at
 // startSupervisor.

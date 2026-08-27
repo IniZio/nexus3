@@ -2951,3 +2951,39 @@ func TestD_PDE16_AllowedRepoShimCompatibility(t *testing.T) {
 		t.Errorf("shim compat: upstream received request on denied path; Authorization=%q", got)
 	}
 }
+
+// TestLookupPolicy_BogusPlaceholderKeyNotFound verifies that a PathPolicies
+// map whose ONLY entry is stored under a non-"" placeholder key (e.g. "x")
+// does NOT match a request carrying a DIFFERENT placeholder.
+//
+// This is the MITM-level proof that the guard==enforcement equivalence holds:
+// if the guard were still an all-keys loop it would accept "x"-keyed configs,
+// but lookupPolicy would still return not-found for them — confirming that the
+// all-keys guard was the lie, not the enforcement.
+//
+// Mutation evidence: if the MITM lookupPolicy were changed to search all keys
+// (not just pp[placeholder] then pp[""]), this test would return found=true,
+// which would be a new MITM-level bypass — so the test also guards lookupPolicy
+// against that direction of regression.
+func TestLookupPolicy_BogusPlaceholderKeyNotFound(t *testing.T) {
+	// A policy stored under "x" — as an attacker would supply.
+	pp := mitm.PathPolicies{
+		"x": {"api.github.com": mitm.HostPolicy{
+			Patterns: nil, // just needs to be present
+		}},
+	}
+	// A request arrives with placeholder "deadbeef1234" (a different key).
+	_, found := mitm.LookupPolicyForTest(pp, "deadbeef1234", "api.github.com")
+	if found {
+		t.Fatal("lookupPolicy: bogus-key policy matched a different placeholder — enforcement gap detected")
+	}
+
+	// Also verify that "" key (wildcard) IS found when present.
+	pp2 := mitm.PathPolicies{
+		"": {"api.github.com": mitm.HostPolicy{}},
+	}
+	_, found2 := mitm.LookupPolicyForTest(pp2, "deadbeef1234", "api.github.com")
+	if !found2 {
+		t.Fatal("lookupPolicy: wildcard key \"\" should match any placeholder but did not")
+	}
+}

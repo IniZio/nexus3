@@ -1540,13 +1540,21 @@ func (s *Service) RestoreFromSnapshot(ctx context.Context, snapID artifact.Snaps
 // enumeration failed twice; only the positive allowlist held). D-PDE-16.
 // Non-GitHub host binds without a path policy are permitted (D-PDE-16
 // asymmetry: host-only bound is legal for non-GitHub hosts).
+// githubHostBoundByPolicy reports whether the GitHub host h is bounded.
+//
+// SECURITY: Only the wildcard key "" is checked — not all top-level keys.
+// lookupPolicy (proxy.go) consults pp[<real-placeholder>] then pp[""].
+// The real placeholder is minted AFTER PathPolicies is frozen at create time,
+// so "" is the ONLY key enforcement will ever honour from a user-supplied map.
+// A policy stored under any other top-level key passes an all-keys guard but
+// is NEVER enforced by the MITM, leaving the full-scope PAT unbounded.
+// Revert this to an all-keys loop and TestT6_BogusKeyGitHubPolicy_Refused fails.
 func githubHostBoundByPolicy(h, allowedRepo string, pp domain.EgressPathPolicies) bool {
 	if allowedRepo != "" {
 		return true
 	}
-	hLower := strings.ToLower(h)
-	for _, hostMap := range pp {
-		if _, ok := hostMap[hLower]; ok {
+	if hostMap, ok := pp[""]; ok {
+		if _, ok := hostMap[strings.ToLower(h)]; ok {
 			return true
 		}
 	}

@@ -497,6 +497,17 @@ Omit it for a regular PR.
 `gh stack submit` works if the `gh-stack` extension is present — it creates
 PRs over REST, not GraphQL, so the perimeter allows it.
 
+### Attaching a GitHub credential
+
+Pass `--repo owner/name` together with `--secret GH_TOKEN@github.com,api.github.com,uploads.github.com` at create time. There is no longer a built-in GitHub token — sandboxes default to no GitHub credential (fail-closed). The `--no-builtin-gh` flag was removed (D-PDE-02); one mechanism: `--secret`.
+
+```sh
+nexus3 create myproject/sandbox \
+  --repo myorg/myrepo \
+  --secret GH_TOKEN@github.com,api.github.com,uploads.github.com \
+  --image nexus3-agent-base
+```
+
 ## Sharing your host agent setup into sandboxes (user mounts)
 
 nexus3 has **no built-in default mounts** — it ships no hardcoded tool list. All host-to-guest sharing is driven entirely by user config. Pass `--no-user-mounts` on a `create` call to suppress all user-global mounts for that sandbox.
@@ -557,3 +568,178 @@ Never add credential directories to `sandbox.mounts`. All virtiofs mounts are ho
 - `~/.aws`, `~/.config/gcloud`, or any provider credential store
 
 The security model rests on "tool payloads, never credential stores."
+
+---
+
+## GitHub/VCS egress for worktree sandboxes
+
+Worktree sandboxes are created automatically by the herdr plugin when an agent opens a pane. They inherit egress rules from the **operator-controlled** `nexus3.yaml` at the repo root — not from the worktree's checked-out branch. This section teaches a fresh agent how to declare the right egress entry so the operator can ratify it.
+
+> **Real token never enters the guest.** The MITM proxy swaps a 64-hex placeholder for the real bearer on the wire (PDF-R-020). The env var the guest sees is always the placeholder, not the real credential.
+
+### Step 1 — Discover your provider, host, and repo identity
+
+Run this inside your checkout:
+
+```sh
+git remote get-url origin
+```
+
+Normalize the URL to `host` + `owner/name`:
+
+| Remote URL form | Host | Owner/name |
+|---|---|---|
+| `https://github.com/acme/myrepo.git` | `github.com` | `acme/myrepo` |
+| `git@github.com:acme/myrepo.git` | `github.com` | `acme/myrepo` |
+| `https://gitlab.com/acme/myrepo.git` | `gitlab.com` | `acme/myrepo` |
+| `git@gitlab.example.com:acme/myrepo.git` | `gitlab.example.com` | `acme/myrepo` |
+| `https://bitbucket.org/acme/myrepo.git` | `bitbucket.org` | `acme/myrepo` |
+
+If the project has no git remote or uses a non-git VCS, determine the host explicitly and declare it in `hosts:`.
+
+### Step 2 — Author the `egress.secrets` entry in `nexus3.yaml`
+
+`egress.secrets` lives in `nexus3.yaml` at the repo root (same file as `sandbox.image`, `egress.allow`, etc.). Add or extend the `egress` key; do not create a separate file.
+
+#### GitHub
+
+GitHub hosts **require** a path policy (`repo:` or `paths:`). Without one, `sandbox create` is refused with a hard error. Use `repo:` for the standard case.
+
+```yaml
+version: 1
+egress:
+  secrets:
+    - env: GH_TOKEN
+      hosts: [github.com, api.github.com, uploads.github.com]
+      repo: acme/myrepo      # mandatory for github hosts — path policy
+```
+
+The `repo:` field activates the built-in method-aware GitHub path matcher for that repository. Cross-repo API calls and `gh api graphql` (GraphQL) are denied (403) even with the entry present.
+
+Short form (equivalent, no path policy supported — **not valid for github hosts** because the guard requires `repo:` or `paths:`):
+
+```yaml
+egress:
+  secrets:
+    - GH_TOKEN@github.com,api.github.com,uploads.github.com   # REJECTED: missing path policy
+```
+
+Do not use the short form for GitHub. Use the long form with `repo:`.
+
+#### GitLab (cloud or self-hosted)
+
+Non-GitHub hosts have no mandatory path policy. A project access token scoped to the specific project is strongly preferred over a full personal access token.
+
+```yaml
+version: 1
+egress:
+  secrets:
+    - env: GITLAB_TOKEN
+      hosts: [gitlab.com]
+```
+
+For a self-hosted instance:
+
+```yaml
+version: 1
+egress:
+  secrets:
+    - env: GITLAB_TOKEN
+      hosts: [git.example.com, git.example.com]   # adjust to your instance hostname
+```
+
+Short form also accepted for non-GitHub hosts:
+
+```yaml
+egress:
+  secrets:
+    - GITLAB_TOKEN@gitlab.com
+```
+
+#### Generic — path-restricted API token
+
+Use `paths:` for a host where you want to restrict which URL paths the token is forwarded to:
+
+```yaml
+version: 1
+egress:
+  secrets:
+    - env: API_TOKEN
+      hosts: [api.example.com]
+      paths: ["/v4/projects/123/**"]
+```
+
+Paths are anchored globs. An optional `METHOD ` prefix restricts to one HTTP verb (e.g. `"GET /v4/projects/123/**"`).
+
+### Step 3 — Trust anchor: propose → merge → ratify
+
+**Critical.** The worktree sandbox launch reads `nexus3.yaml` from `refs/remotes/origin/HEAD` (the operator's default branch), never from the agent's checked-out branch.
+
+Workflow:
+
+1. Agent authors `nexus3.yaml` on its feature branch and opens a PR.
+2. The PR branch config grants **nothing** — the sandbox launches without the declared egress.
+3. Operator reviews and merges to the default branch.
+4. Thereafter, every new worktree sandbox inherits the egress rule from the merged config.
+
+A config on a PR branch only is **not a security gap** — it is the intended trust boundary. The operator's merge is the ratification act.
+
+### Step 4 — Verify the egress is working (after the operator merges)
+
+Open a shell in a worktree sandbox and run the provider-appropriate check:
+
+**GitHub:**
+
+```sh
+# Own-repo REST call → 200 expected
+gh api repos/acme/myrepo --jq .full_name
+
+# Confirm placeholder — must be 64 hex chars, NOT the real token
+echo $GH_TOKEN | grep -E '^[0-9a-f]{64}$' && echo "placeholder OK" || echo "FAIL: real token exposed"
+
+# Cross-repo call → 403 expected (path policy enforced)
+gh api repos/some-other-org/other-repo --jq .id && echo "UNEXPECTED 200 — check path policy" || echo "403 OK"
+
+# GraphQL → 403 expected (GraphQL is denied fail-closed)
+gh api graphql -f query='{ viewer { login } }' && echo "UNEXPECTED 200" || echo "403 OK"
+```
+
+**GitLab:**
+
+```sh
+# Verify token reaches the instance and is accepted
+curl -sf -H "Authorization: Bearer $GITLAB_TOKEN" \
+  https://gitlab.com/api/v4/projects/acme%2Fmyrepo | jq .id
+
+# Confirm placeholder
+echo $GITLAB_TOKEN | grep -E '^[0-9a-f]{64}$' && echo "placeholder OK" || echo "FAIL"
+```
+
+**Generic API token:**
+
+```sh
+# Declared host → token forwarded, request should succeed
+curl -sf -H "Authorization: Bearer $API_TOKEN" https://api.example.com/v4/projects/123/
+
+# Non-declared host → token NOT forwarded (placeholder sent, rejected)
+curl -sf -H "Authorization: Bearer $API_TOKEN" https://other.example.com/ || echo "rejected OK"
+```
+
+### Manual sandbox create (non-worktree) with a VCS secret
+
+Outside the herdr worktree flow, pass `--secret` explicitly. GitHub additionally requires `--repo`:
+
+```sh
+# GitHub
+nexus3 sandbox create myproject/dev-1 \
+  --image nexus3-agent-base \
+  --secret GH_TOKEN@github.com,api.github.com,uploads.github.com \
+  --repo acme/myrepo
+
+# GitLab
+nexus3 sandbox create myproject/dev-1 \
+  --image nexus3-agent-base \
+  --secret GITLAB_TOKEN@gitlab.com
+```
+
+There is no longer a built-in GitHub token; `--repo` alone without `--secret` does not inject a credential (D-PDE-02). Pass both, or declare both in `nexus3.yaml` for automatic wiring via the worktree flow.

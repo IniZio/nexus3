@@ -31,6 +31,7 @@ const MinSupportedVersion = 1
 
 // EgressSecret is one entry in the egress.secrets list.
 // It binds a host-side env var to a set of target hosts.
+// Path policies (GitHub or generic globs) live in EgressPolicy, not here.
 //
 // Short form (scalar in the YAML sequence):
 //
@@ -40,8 +41,6 @@ const MinSupportedVersion = 1
 //
 //	env: ENV
 //	hosts: [host1, host2]
-//	repo: owner/name       # optional; GitHub sugar
-//	paths: ["/v1/**"]      # optional; generic path allowlist
 type EgressSecret struct {
 	// Env is the name of the host env var whose value is injected as a
 	// Bearer / Authorization token for the listed hosts.
@@ -49,14 +48,6 @@ type EgressSecret struct {
 
 	// Hosts is the list of hostnames the secret is forwarded to.
 	Hosts []string `yaml:"hosts"`
-
-	// Repo is an optional "owner/name" GitHub repository. When set the
-	// built-in method-aware GitHub path matcher is activated for this entry.
-	Repo string `yaml:"repo"`
-
-	// Paths is an optional generic positive path allowlist (anchored globs,
-	// optional "METHOD " prefix) applied to every host in Hosts.
-	Paths []string `yaml:"paths"`
 }
 
 // EgressSecrets is a list of EgressSecret entries. Each element may be either
@@ -82,7 +73,7 @@ func (s *EgressSecrets) UnmarshalYAML(value *yaml.Node) error {
 		case yaml.MappingNode:
 			// Long form: {env, hosts, repo?, paths?}
 			// Manually check for unknown keys before decoding.
-			knownKeys := map[string]bool{"env": true, "hosts": true, "repo": true, "paths": true}
+			knownKeys := map[string]bool{"env": true, "hosts": true}
 			for i := 0; i+1 < len(item.Content); i += 2 {
 				k := item.Content[i].Value
 				if !knownKeys[k] {
@@ -159,12 +150,69 @@ func splitComma(s string) []string {
 	return out
 }
 
+// EgressPolicy is one destination-scoped path-policy entry.
+// It restricts what URL paths can be reached on a specific host.
+// Paths are method-aware anchored globs (optional "METHOD " prefix,
+// e.g. "GET /repos/**" or "/repos/**" for any method).
+type EgressPolicy struct {
+	// Host is the target hostname (required).
+	Host string `yaml:"host"`
+
+	// Paths is the positive path allowlist (anchored globs). Default-deny:
+	// only listed paths are allowed; all others are rejected. Required.
+	Paths []string `yaml:"paths"`
+}
+
+// EgressPolicies is a list of EgressPolicy entries.
+type EgressPolicies []EgressPolicy
+
+// UnmarshalYAML implements yaml.Unmarshaler, enforcing unknown-key rejection
+// and field-level validation for each egress.policy entry.
+func (p *EgressPolicies) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind != yaml.SequenceNode {
+		return fmt.Errorf("config: egress.policy must be a YAML sequence, got kind %d", value.Kind)
+	}
+	out := make(EgressPolicies, 0, len(value.Content))
+	for _, item := range value.Content {
+		if item.Kind != yaml.MappingNode {
+			return fmt.Errorf("config: egress.policy entry must be a mapping, got YAML kind %d", item.Kind)
+		}
+		// Manually check for unknown keys (KnownFields(true) does not propagate
+		// into custom unmarshalers; we enforce it here explicitly).
+		knownKeys := map[string]bool{"host": true, "paths": true}
+		for i := 0; i+1 < len(item.Content); i += 2 {
+			k := item.Content[i].Value
+			if !knownKeys[k] {
+				return fmt.Errorf("config: egress.policy entry: unknown key %q", k)
+			}
+		}
+		var entry EgressPolicy
+		if err := item.Decode(&entry); err != nil {
+			return fmt.Errorf("config: egress.policy entry: %w", err)
+		}
+		if entry.Host == "" {
+			return fmt.Errorf("config: egress.policy entry: missing required field 'host'")
+		}
+		if len(entry.Paths) == 0 {
+			return fmt.Errorf("config: egress.policy entry %q: missing required field 'paths' (must have at least one path)", entry.Host)
+		}
+		out = append(out, entry)
+	}
+	*p = out
+	return nil
+}
+
 // EgressConfig holds per-repo egress allow rules.
 type EgressConfig struct {
 	// Allow lists additional hostnames the sandbox may reach.
 	// These are merged on top of the built-in perimeter allowlist by the
 	// precedence resolver; they do not replace it.
 	Allow []string `yaml:"allow"`
+
+	// Policy lists destination-scoped path-policy entries. Each entry restricts
+	// what URL paths are reachable on a specific host. Path policies for GitHub
+	// hosts are mandatory (D-PDE-16); the wiring layer enforces this.
+	Policy EgressPolicies `yaml:"policy"`
 
 	// Secrets lists host+credential bindings. Each entry attaches one env var
 	// (looked up from the host environment) to one or more target hostnames.

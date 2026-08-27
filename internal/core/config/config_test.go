@@ -41,6 +41,9 @@ func TestLoad_ValidFile_Parsed(t *testing.T) {
 	content := `version: 1
 egress:
   allow: ["proxy.golang.org", "sum.golang.org"]
+  policy:
+    - host: api.github.com
+      paths: ["/repos/owner/myrepo/**", "/user"]
 sandbox:
   image: nexus3-agent-base
   memory: 8192
@@ -64,6 +67,15 @@ sandbox:
 	}
 	if cfg.Egress.Allow[0] != "proxy.golang.org" {
 		t.Fatalf("egress.allow[0]: want proxy.golang.org, got %q", cfg.Egress.Allow[0])
+	}
+	if len(cfg.Egress.Policy) != 1 {
+		t.Fatalf("egress.policy: want 1 entry, got %v", cfg.Egress.Policy)
+	}
+	if cfg.Egress.Policy[0].Host != "api.github.com" {
+		t.Fatalf("egress.policy[0].host: want api.github.com, got %q", cfg.Egress.Policy[0].Host)
+	}
+	if len(cfg.Egress.Policy[0].Paths) == 0 {
+		t.Fatalf("egress.policy[0].paths: want non-empty, got empty")
 	}
 	if cfg.Sandbox.Image != "nexus3-agent-base" {
 		t.Fatalf("sandbox.image: want nexus3-agent-base, got %q", cfg.Sandbox.Image)
@@ -681,42 +693,6 @@ func TestEgressSecrets_ShortForm(t *testing.T) {
 	}
 }
 
-func TestEgressSecrets_LongForm_GitHub(t *testing.T) {
-	data := []byte("version: 1\negress:\n  secrets:\n    - env: GH_TOKEN\n      hosts: [api.github.com]\n      repo: owner/myrepo\n")
-	cfg, err := parseBytes(t, data)
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-	if len(cfg.Egress.Secrets) != 1 {
-		t.Fatalf("want 1 secret, got %d", len(cfg.Egress.Secrets))
-	}
-	s := cfg.Egress.Secrets[0]
-	if s.Env != "GH_TOKEN" {
-		t.Errorf("Env: want GH_TOKEN, got %q", s.Env)
-	}
-	if s.Repo != "owner/myrepo" {
-		t.Errorf("Repo: want owner/myrepo, got %q", s.Repo)
-	}
-}
-
-func TestEgressSecrets_LongForm_GenericPaths(t *testing.T) {
-	data := []byte("version: 1\negress:\n  secrets:\n    - env: GITLAB_TOKEN\n      hosts: [gitlab.com]\n      paths: [\"/v4/projects/123/**\"]\n")
-	cfg, err := parseBytes(t, data)
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-	if len(cfg.Egress.Secrets) != 1 {
-		t.Fatalf("want 1 secret, got %d", len(cfg.Egress.Secrets))
-	}
-	s := cfg.Egress.Secrets[0]
-	if s.Env != "GITLAB_TOKEN" {
-		t.Errorf("Env: want GITLAB_TOKEN, got %q", s.Env)
-	}
-	if len(s.Paths) != 1 || s.Paths[0] != "/v4/projects/123/**" {
-		t.Errorf("Paths: want [\"/v4/projects/123/**\"], got %v", s.Paths)
-	}
-}
-
 // TestEgressSecrets_UnknownKey_HardError verifies AC T2-AC3:
 // an unknown key inside egress.secrets[] is a hard error (fail-closed on typo).
 func TestEgressSecrets_UnknownKey_HardError(t *testing.T) {
@@ -724,6 +700,92 @@ func TestEgressSecrets_UnknownKey_HardError(t *testing.T) {
 	_, err := parseBytes(t, data)
 	if err == nil {
 		t.Fatal("want error for unknown key inside egress.secrets entry, got nil")
+	}
+}
+
+// TestEgressSecrets_OldRepoField_UnknownKeyError verifies that the old `repo:`
+// field under egress.secrets is rejected as an unknown key. The field has been
+// removed from the schema entirely — path policies belong in egress.policy.paths.
+func TestEgressSecrets_OldRepoField_UnknownKeyError(t *testing.T) {
+	data := []byte("version: 1\negress:\n  secrets:\n    - env: GH_TOKEN\n      hosts: [api.github.com]\n      repo: owner/myrepo\n")
+	_, err := parseBytes(t, data)
+	if err == nil {
+		t.Fatal("want error for old repo: field under egress.secrets, got nil — field must now be under egress.policy")
+	}
+}
+
+// TestEgressSecrets_OldPathsField_UnknownKeyError verifies that the old `paths:`
+// field under egress.secrets is now rejected as an unknown key (it has moved to
+// egress.policy).
+func TestEgressSecrets_OldPathsField_UnknownKeyError(t *testing.T) {
+	data := []byte("version: 1\negress:\n  secrets:\n    - env: GITLAB_TOKEN\n      hosts: [gitlab.com]\n      paths: [\"/v4/projects/123/**\"]\n")
+	_, err := parseBytes(t, data)
+	if err == nil {
+		t.Fatal("want error for old paths: field under egress.secrets, got nil — field must now be under egress.policy")
+	}
+}
+
+// TestEgressPolicy_GenericPaths_Parsed verifies that a generic paths policy entry
+// (no preset) parses correctly.
+func TestEgressPolicy_GenericPaths_Parsed(t *testing.T) {
+	data := []byte("version: 1\negress:\n  policy:\n    - host: api.example.com\n      paths: [\"/v4/projects/123/**\"]\n")
+	cfg, err := parseBytes(t, data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(cfg.Egress.Policy) != 1 {
+		t.Fatalf("want 1 policy entry, got %d", len(cfg.Egress.Policy))
+	}
+	p := cfg.Egress.Policy[0]
+	if p.Host != "api.example.com" {
+		t.Errorf("Host: want api.example.com, got %q", p.Host)
+	}
+	if len(p.Paths) != 1 || p.Paths[0] != "/v4/projects/123/**" {
+		t.Errorf("Paths: want [\"/v4/projects/123/**\"], got %v", p.Paths)
+	}
+}
+
+// TestEgressPolicy_MissingHost_Error verifies that a policy entry without a
+// host field is a hard error.
+func TestEgressPolicy_MissingHost_Error(t *testing.T) {
+	data := []byte("version: 1\negress:\n  policy:\n    - paths: [\"/repos/**\"]\n")
+	_, err := parseBytes(t, data)
+	if err == nil {
+		t.Fatal("want error for policy entry missing host, got nil")
+	}
+}
+
+// TestEgressPolicy_UnknownKey_HardError verifies that an unknown key inside
+// egress.policy[] is a hard error.
+func TestEgressPolicy_UnknownKey_HardError(t *testing.T) {
+	data := []byte("version: 1\negress:\n  policy:\n    - host: api.github.com\n      paths: [\"/repos/**\"]\n      typo_key: oops\n")
+	_, err := parseBytes(t, data)
+	if err == nil {
+		t.Fatal("want error for unknown key in egress.policy entry, got nil")
+	}
+}
+
+// TestEgressPolicy_EmptyPaths_Error verifies that a policy entry with no paths
+// entries is a hard error (paths is required — an empty allowlist would silently
+// default-deny everything, which is almost certainly a misconfiguration).
+func TestEgressPolicy_EmptyPaths_Error(t *testing.T) {
+	data := []byte("version: 1\negress:\n  policy:\n    - host: api.github.com\n")
+	_, err := parseBytes(t, data)
+	if err == nil {
+		t.Fatal("want error for policy entry with no paths, got nil")
+	}
+}
+
+// TestEgressPolicy_Absent_ZeroValue verifies that an absent egress.policy is
+// not an error and produces a zero-length slice.
+func TestEgressPolicy_Absent_ZeroValue(t *testing.T) {
+	data := []byte("version: 1\negress:\n  allow: [proxy.golang.org]\n")
+	cfg, err := parseBytes(t, data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(cfg.Egress.Policy) != 0 {
+		t.Fatalf("want zero policy entries when absent, got %d", len(cfg.Egress.Policy))
 	}
 }
 

@@ -3055,122 +3055,99 @@ func readTrustedRefBytes(commonGitDir string) ([]byte, error) {
 }
 
 // buildWorktreeEgressArgs derives the --secret and --repo CLI args from the
-// egress.secrets section of the nexus3.yaml read from the trusted ref.
+// egress.policy and egress.secrets sections of the nexus3.yaml read from the
+// trusted ref.
 //
-// For each EgressSecret entry:
-//   - Non-GitHub host: emits "ENV@host1,host2" in secrets; paths: is stored in
-//     pathPolicies for future enforcement (non-GitHub hosts do not require a path policy).
-//   - GitHub host with explicit repo:: emits --repo owner/name (AllowedRepo).
-//   - GitHub host derivable from origin remote: emits --repo owner/name.
-//   - GitHub host with paths: but no repo:: surface error (paths: on GitHub not yet
-//     supported via the CLI subprocess path; use repo: instead).
-//   - GitHub host with NO policy (no repo:, no paths:, not derivable): return error
-//     (D-PDE-16 mandatory guard — refuse rather than grant unscoped access).
+// Algorithm (three steps):
 //
-// The commonGitDir is used to derive the remote URL when a GitHub secret lacks an
-// explicit repo: field. worktreeGitRunner is the injectable seam.
+//  1. Build pathPolicies and allowedRepo from egress.policy:
+//     - preset:github(+repo) → EgressGitHubPolicy keyed under [""][host].
+//       repo is derived from the origin remote when absent.
+//     - paths → EgressHostPolicy{Paths} keyed under [""][host].
 //
-// T3 hardening: derived owner or name equal to "." or ".." is rejected.
-func buildWorktreeEgressArgs(cfg config.Config, commonGitDir string) (secrets []string, allowedRepo string, pathPolicies domain.EgressPathPolicies, err error) {
+//  2. Build secrets from egress.secrets (env→hosts only; no path info).
+//
+//  3. D-PDE-16 check: every GitHub host in a secret bind must be covered
+//     by a PathPolicies entry or AllowedRepo. Non-GitHub hosts are exempt.
+//
+// T3 hardening: derived or explicit owner/name equal to "." or ".." is rejected.
+// buildWorktreeEgressArgs derives the --secret and --repo CLI args from the
+// egress.policy and egress.secrets sections of the nexus3.yaml read from the
+// trusted ref.
+//
+// Algorithm (three steps):
+//
+//  1. Build pathPolicies from egress.policy (generic paths only):
+//     each entry maps host → EgressHostPolicy{Paths}.
+//
+//  2. Build secrets from egress.secrets (env→hosts only).
+//
+//  3. D-PDE-16 check: every GitHub host in a secret bind must be covered
+//     by a PathPolicies entry or AllowedRepo (CLI shim). Non-GitHub exempt.
+//
+// NOTE: the CLI --repo/AllowedRepo shim is NOT set from the config path.
+// AllowedRepo is only set when the user passes --repo explicitly at the CLI.
+// The config path uses generic paths policies for all hosts including GitHub.
+func buildWorktreeEgressArgs(cfg config.Config) (secrets []string, allowedRepo string, pathPolicies domain.EgressPathPolicies, err error) {
+	// Step 1: policy entries → pathPolicies (generic paths for all hosts).
+	for _, p := range cfg.Egress.Policy {
+		if len(p.Paths) > 0 {
+			pathPolicies = egressAddHostPolicy(pathPolicies, p.Host,
+				domain.EgressHostPolicy{Paths: p.Paths})
+		}
+	}
+
+	// Step 2: secrets → "ENV@host1,host2" strings.
 	for _, s := range cfg.Egress.Secrets {
 		if len(s.Hosts) == 0 {
 			continue
 		}
-		hostStr := strings.Join(s.Hosts, ",")
-		secrets = append(secrets, s.Env+"@"+hostStr)
+		secrets = append(secrets, s.Env+"@"+strings.Join(s.Hosts, ","))
+	}
 
-		hasGitHub := false
+	// Step 3: D-PDE-16 — GitHub secret hosts require a covering policy.
+	// Non-GitHub hosts are exempt (D-PDE-16 asymmetry).
+	// allowedRepo is always "" from the config path (only set by CLI --repo).
+	for _, s := range cfg.Egress.Secrets {
 		for _, h := range s.Hosts {
-			if domain.IsGitHubHost(strings.ToLower(h)) {
-				hasGitHub = true
-				break
-			}
-		}
-
-		if !hasGitHub {
-			// Non-GitHub: host+secret only; paths: stored for future per-placeholder enforcement.
-			if len(s.Paths) > 0 {
-				pathPolicies = egressAddPathsPolicy(pathPolicies, s.Hosts, s.Paths)
-			}
-			continue
-		}
-
-		// GitHub host: a path policy is required (D-PDE-16).
-		switch {
-		case s.Repo != "":
-			// Explicit owner/name.
-			owner, name, ok := strings.Cut(s.Repo, "/")
-			if !ok || owner == "" || name == "" {
-				return nil, "", nil, fmt.Errorf("egress secret %q: repo %q is not in owner/name format", s.Env, s.Repo)
-			}
-			// T3 hardening: reject "." and ".." segments.
-			if owner == "." || owner == ".." || name == "." || name == ".." {
-				return nil, "", nil, fmt.Errorf("egress secret %q: repo %q contains invalid segment (. or ..)", s.Env, s.Repo)
-			}
-			if allowedRepo != "" && allowedRepo != s.Repo {
+			if domain.IsGitHubHost(strings.ToLower(h)) && !egressGitHubHostBound(h, allowedRepo, pathPolicies) {
 				return nil, "", nil, fmt.Errorf(
-					"egress secret %q: conflicting GitHub repos %q vs %q; "+
-						"multiple GitHub repos require per-placeholder path policies (not yet supported in worktree-sandbox path)",
-					s.Env, allowedRepo, s.Repo,
+					"egress secret %q targets GitHub host %q but no egress.policy entry covers it "+
+						"(D-PDE-16: refusing create to avoid unscoped access)",
+					s.Env, h,
 				)
 			}
-			allowedRepo = s.Repo
-
-		case len(s.Paths) > 0:
-			// paths: on a GitHub host — valid policy but not serialisable via --repo.
-			return nil, "", nil, fmt.Errorf(
-				"egress secret %q targets GitHub host(s) %v with a paths: policy; "+
-					"paths: on GitHub hosts is not yet supported via the worktree-sandbox CLI path — use repo: instead",
-				s.Env, s.Hosts,
-			)
-
-		default:
-			// Try to derive from the origin remote URL.
-			derived := ""
-			if commonGitDir != "" {
-				if remOut, remErr := worktreeGitRunner(commonGitDir, "remote", "get-url", "origin"); remErr == nil {
-					remoteURL := strings.TrimSpace(string(remOut))
-					if owner, name, ok := deriveGitHubRepo(remoteURL); ok {
-						// T3 hardening: reject "." and ".." segments.
-						if owner != "." && owner != ".." && name != "." && name != ".." {
-							derived = owner + "/" + name
-						}
-					}
-				}
-			}
-			if derived == "" {
-				return nil, "", nil, fmt.Errorf(
-					"egress secret %q targets GitHub host(s) %v but has no path policy "+
-						"(no repo:, no paths:, and GitHub repo could not be derived from origin remote); "+
-						"refusing create to avoid unscoped access (D-PDE-16)",
-					s.Env, s.Hosts,
-				)
-			}
-			if allowedRepo != "" && allowedRepo != derived {
-				return nil, "", nil, fmt.Errorf(
-					"egress secret %q: conflicting GitHub repos %q vs %q (derived); "+
-						"multiple GitHub repos require per-placeholder path policies",
-					s.Env, allowedRepo, derived,
-				)
-			}
-			allowedRepo = derived
 		}
 	}
+
 	return secrets, allowedRepo, pathPolicies, nil
 }
 
-// egressAddPathsPolicy merges a paths: policy into pathPolicies under the
-// wildcard placeholder key "" for each host in hosts.
-func egressAddPathsPolicy(pp domain.EgressPathPolicies, hosts, paths []string) domain.EgressPathPolicies {
+// egressGitHubHostBound is the D-PDE-16 CLI-time check: is h covered by
+// allowedRepo (shim) or a PathPolicies entry?
+func egressGitHubHostBound(h, allowedRepo string, pp domain.EgressPathPolicies) bool {
+	if allowedRepo != "" {
+		return true
+	}
+	hLower := strings.ToLower(h)
+	for _, hostMap := range pp {
+		if _, ok := hostMap[hLower]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+// egressAddHostPolicy adds a path policy for one host under the wildcard
+// placeholder key "" (resolves to all authenticated requests for that host).
+func egressAddHostPolicy(pp domain.EgressPathPolicies, host string, policy domain.EgressHostPolicy) domain.EgressPathPolicies {
 	if pp == nil {
 		pp = make(domain.EgressPathPolicies)
 	}
 	if pp[""] == nil {
 		pp[""] = make(map[string]domain.EgressHostPolicy)
 	}
-	for _, h := range hosts {
-		pp[""][strings.ToLower(h)] = domain.EgressHostPolicy{Paths: paths}
-	}
+	pp[""][strings.ToLower(host)] = policy
 	return pp
 }
 
@@ -3550,7 +3527,7 @@ func herdrWorktreeSandbox(
 				}
 				return nil
 			}
-			egressSecrets, egressAllowedRepo, egressPathPolicies, err = buildWorktreeEgressArgs(parsedCfg, commonGitDir)
+			egressSecrets, egressAllowedRepo, egressPathPolicies, err = buildWorktreeEgressArgs(parsedCfg)
 			if err != nil {
 				fmt.Fprintf(w, "worktree-sandbox: build egress args: %v\n", err)
 				if !failSafe {

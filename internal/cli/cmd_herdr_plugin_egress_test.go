@@ -86,7 +86,7 @@ func TestBuildWorktreeEgressArgs(t *testing.T) {
 		return func() { worktreeGitRunner = old }
 	}
 
-	t.Run("a: GitLab entry", func(t *testing.T) {
+	t.Run("a: non-GitHub secret, no policy needed", func(t *testing.T) {
 		defer withGitRunner(t, func(dir string, args ...string) ([]byte, error) {
 			return nil, fmt.Errorf("not called")
 		})()
@@ -94,7 +94,7 @@ func TestBuildWorktreeEgressArgs(t *testing.T) {
 		cfg.Egress.Secrets = config.EgressSecrets{
 			{Env: "GITLAB_TOKEN", Hosts: []string{"gitlab.com"}},
 		}
-		secrets, allowedRepo, _, err := buildWorktreeEgressArgs(cfg, "")
+		secrets, allowedRepo, _, err := buildWorktreeEgressArgs(cfg)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -106,7 +106,7 @@ func TestBuildWorktreeEgressArgs(t *testing.T) {
 		}
 	})
 
-	t.Run("b: self-hosted entry", func(t *testing.T) {
+	t.Run("b: self-hosted secret, non-GitHub, no policy needed", func(t *testing.T) {
 		defer withGitRunner(t, func(dir string, args ...string) ([]byte, error) {
 			return nil, fmt.Errorf("not called")
 		})()
@@ -114,7 +114,7 @@ func TestBuildWorktreeEgressArgs(t *testing.T) {
 		cfg.Egress.Secrets = config.EgressSecrets{
 			{Env: "MYTOKEN", Hosts: []string{"git.corp.example.com"}},
 		}
-		secrets, _, _, err := buildWorktreeEgressArgs(cfg, "")
+		secrets, _, _, err := buildWorktreeEgressArgs(cfg)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -123,128 +123,86 @@ func TestBuildWorktreeEgressArgs(t *testing.T) {
 		}
 	})
 
-	t.Run("c: GitHub entry with explicit repo", func(t *testing.T) {
+	t.Run("c: GitHub secret with generic paths policy — allowed", func(t *testing.T) {
 		defer withGitRunner(t, func(dir string, args ...string) ([]byte, error) {
 			return nil, fmt.Errorf("not called")
 		})()
 		cfg := config.Config{}
-		cfg.Egress.Secrets = config.EgressSecrets{
-			{Env: "GH_TOKEN", Hosts: []string{"github.com"}, Repo: "owner/myrepo"},
+		cfg.Egress.Policy = config.EgressPolicies{
+			{Host: "api.github.com", Paths: []string{"/repos/owner/myrepo/**", "/repos/owner/myrepo", "/user"}},
 		}
-		secrets, allowedRepo, _, err := buildWorktreeEgressArgs(cfg, "")
+		cfg.Egress.Secrets = config.EgressSecrets{
+			{Env: "GH_TOKEN", Hosts: []string{"api.github.com"}},
+		}
+		secrets, allowedRepo, pp, err := buildWorktreeEgressArgs(cfg)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(secrets) != 1 || secrets[0] != "GH_TOKEN@github.com" {
+		if len(secrets) != 1 || secrets[0] != "GH_TOKEN@api.github.com" {
 			t.Errorf("got secrets=%v", secrets)
 		}
-		if allowedRepo != "owner/myrepo" {
-			t.Errorf("got allowedRepo=%q, want owner/myrepo", allowedRepo)
+		// Config path never sets allowedRepo — that's CLI-only.
+		if allowedRepo != "" {
+			t.Errorf("got allowedRepo=%q, want empty (generic paths policy, not CLI --repo)", allowedRepo)
+		}
+		// PathPolicies should have a paths entry for api.github.com.
+		if pp == nil || pp[""] == nil {
+			t.Errorf("expected non-nil PathPolicies, got %v", pp)
+		} else if pol, ok := pp[""]["api.github.com"]; !ok || len(pol.Paths) == 0 {
+			t.Errorf("expected Paths policy for api.github.com, got %v", pp)
 		}
 	})
 
-	t.Run("d: GitHub entry without repo, remote derivable", func(t *testing.T) {
+	t.Run("d: GitHub secret with NO policy — D-PDE-16 error", func(t *testing.T) {
 		defer withGitRunner(t, func(dir string, args ...string) ([]byte, error) {
-			if args[0] == "remote" && args[1] == "get-url" {
-				return []byte("https://github.com/myorg/myproj.git\n"), nil
-			}
-			return nil, fmt.Errorf("unexpected git args: %v", args)
+			return nil, fmt.Errorf("not called")
 		})()
 		cfg := config.Config{}
+		// No egress.policy entries — GitHub host must be refused.
 		cfg.Egress.Secrets = config.EgressSecrets{
 			{Env: "GH_TOKEN", Hosts: []string{"github.com"}},
 		}
-		_, allowedRepo, _, err := buildWorktreeEgressArgs(cfg, "/fake/git")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if allowedRepo != "myorg/myproj" {
-			t.Errorf("got allowedRepo=%q, want myorg/myproj", allowedRepo)
-		}
-	})
-
-	t.Run("e: GitHub entry without repo, not derivable", func(t *testing.T) {
-		defer withGitRunner(t, func(dir string, args ...string) ([]byte, error) {
-			return nil, fmt.Errorf("no remote")
-		})()
-		cfg := config.Config{}
-		cfg.Egress.Secrets = config.EgressSecrets{
-			{Env: "GH_TOKEN", Hosts: []string{"github.com"}},
-		}
-		_, _, _, err := buildWorktreeEgressArgs(cfg, "")
+		_, _, _, err := buildWorktreeEgressArgs(cfg)
 		if err == nil {
-			t.Fatal("expected error, got nil")
+			t.Fatal("expected D-PDE-16 error for GitHub secret without any policy, got nil")
 		}
 		if !strings.Contains(err.Error(), "D-PDE-16") && !strings.Contains(err.Error(), "refusing create") {
 			t.Errorf("error should mention D-PDE-16 or refusing create: %v", err)
 		}
 	})
 
-	t.Run("f: GitHub entry with paths but no repo", func(t *testing.T) {
+	t.Run("e: non-API secret host plus generic paths policy", func(t *testing.T) {
 		defer withGitRunner(t, func(dir string, args ...string) ([]byte, error) {
 			return nil, fmt.Errorf("not called")
 		})()
 		cfg := config.Config{}
+		cfg.Egress.Policy = config.EgressPolicies{
+			{Host: "api.example.com", Paths: []string{"GET /v4/projects/123/**"}},
+		}
 		cfg.Egress.Secrets = config.EgressSecrets{
-			{Env: "GH_TOKEN", Hosts: []string{"github.com"}, Paths: []string{"/repos/*"}},
+			{Env: "API_TOKEN", Hosts: []string{"api.example.com"}},
 		}
-		_, _, _, err := buildWorktreeEgressArgs(cfg, "")
-		if err == nil {
-			t.Fatal("expected error, got nil")
+		secrets, allowedRepo, pp, err := buildWorktreeEgressArgs(cfg)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
-		if !strings.Contains(err.Error(), "paths:") && !strings.Contains(err.Error(), "not yet supported") {
-			t.Errorf("error should mention paths: or not yet supported: %v", err)
+		if len(secrets) != 1 || secrets[0] != "API_TOKEN@api.example.com" {
+			t.Errorf("got secrets=%v", secrets)
+		}
+		if allowedRepo != "" {
+			t.Errorf("got allowedRepo=%q, want empty", allowedRepo)
+		}
+		if pp == nil || pp[""]["api.example.com"].Paths == nil {
+			t.Errorf("expected Paths policy for api.example.com, got %v", pp)
 		}
 	})
 
-	t.Run("g: invalid repo format badrepo", func(t *testing.T) {
+	t.Run("f: empty config — no secrets, no policy", func(t *testing.T) {
 		defer withGitRunner(t, func(dir string, args ...string) ([]byte, error) {
 			return nil, fmt.Errorf("not called")
 		})()
 		cfg := config.Config{}
-		cfg.Egress.Secrets = config.EgressSecrets{
-			{Env: "GH_TOKEN", Hosts: []string{"github.com"}, Repo: "badrepo"},
-		}
-		_, _, _, err := buildWorktreeEgressArgs(cfg, "")
-		if err == nil {
-			t.Fatal("expected error for bad repo format, got nil")
-		}
-	})
-
-	t.Run("h: repo with . segment", func(t *testing.T) {
-		defer withGitRunner(t, func(dir string, args ...string) ([]byte, error) {
-			return nil, fmt.Errorf("not called")
-		})()
-		cfg := config.Config{}
-		cfg.Egress.Secrets = config.EgressSecrets{
-			{Env: "GH_TOKEN", Hosts: []string{"github.com"}, Repo: "owner/."},
-		}
-		_, _, _, err := buildWorktreeEgressArgs(cfg, "")
-		if err == nil {
-			t.Fatal("expected error for . segment, got nil")
-		}
-	})
-
-	t.Run("i: repo with .. segment", func(t *testing.T) {
-		defer withGitRunner(t, func(dir string, args ...string) ([]byte, error) {
-			return nil, fmt.Errorf("not called")
-		})()
-		cfg := config.Config{}
-		cfg.Egress.Secrets = config.EgressSecrets{
-			{Env: "GH_TOKEN", Hosts: []string{"github.com"}, Repo: "owner/.."},
-		}
-		_, _, _, err := buildWorktreeEgressArgs(cfg, "")
-		if err == nil {
-			t.Fatal("expected error for .. segment, got nil")
-		}
-	})
-
-	t.Run("j: empty config no secrets", func(t *testing.T) {
-		defer withGitRunner(t, func(dir string, args ...string) ([]byte, error) {
-			return nil, fmt.Errorf("not called")
-		})()
-		cfg := config.Config{}
-		secrets, allowedRepo, pp, err := buildWorktreeEgressArgs(cfg, "")
+		secrets, allowedRepo, pp, err := buildWorktreeEgressArgs(cfg)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -294,7 +252,7 @@ func TestReadTrustedRefBytes_FailClosed(t *testing.T) {
 	gitExec(t, mainRepo, "config", "user.name", "Test User")
 
 	// 2. Commit nexus3.yaml on the default branch.
-	originContent := "version: 1\negress:\n  secrets:\n    - env: GH_TOKEN\n      hosts:\n        - github.com\n      repo: origin/repo\n"
+	originContent := "version: 1\negress:\n  policy:\n    - host: github.com\n      paths: [\"/repos/origin/repo/**\", \"/user\"]\n  secrets:\n    - env: GH_TOKEN\n      hosts:\n        - github.com\n"
 	if err := os.WriteFile(filepath.Join(mainRepo, "nexus3.yaml"), []byte(originContent), 0600); err != nil {
 		t.Fatal(err)
 	}

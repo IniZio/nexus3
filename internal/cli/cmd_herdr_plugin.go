@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -479,8 +480,8 @@ func runHerdrPlugin(ctx context.Context, args []string, out *Output) error {
 		if exeErr != nil {
 			return &CodedError{Code: ErrCodeInternalError, Msg: "__herdr-plugin worktree-sandbox: resolve executable: " + exeErr.Error(), Err: exeErr}
 		}
-		createFn := func(ctx context.Context, handle, mountSpec, imageFlag, imageVal string, extraMounts []string) error {
-			args := herdrWorktreeSandboxCreateArgs(handle, mountSpec, imageFlag, imageVal, extraMounts)
+		createFn := func(ctx context.Context, handle, mountSpec, imageFlag, imageVal string, extraMounts, secrets []string, allowedRepo string) error {
+			args := herdrWorktreeSandboxCreateArgs(handle, mountSpec, imageFlag, imageVal, extraMounts, secrets, allowedRepo)
 			cmd := herdrExecCommandContext(ctx, exe, append([]string{"sandbox", "create"}, args...)...)
 			cmd.Stdout = out.w
 			cmd.Stderr = out.w
@@ -692,29 +693,29 @@ func herdrPrintImages(ctx context.Context, w io.Writer) {
 // the corresponding `sandbox create` flags.
 //
 // D-PD-36 refuses to create a sandbox that would carry an unbounded GitHub
-// credential: the caller must either scope it to one repo (--repo owner/name)
-// or decline the token (--no-builtin-gh). That guard is correct, but a herdr
-// pane that shells out without either flag simply dead-ends on it, which is
-// how both create actions failed. Asking makes the choice visible at the only
+// credential: the caller must scope it to one repo (--repo owner/name) or
+// pass no GitHub flags at all. Asking makes the choice visible at the only
 // point where the answer is known.
 //
-// Declining is the default: a sandbox with no GitHub token is the safe
-// posture, and the operator can create a scoped one deliberately.
+// Declining is the default (blank answer → no flags): a sandbox with no
+// GitHub token is the safe posture, and the operator can create a scoped one
+// deliberately. When a repo IS given the secret is auto-wired via
+// --secret GH_TOKEN@… because the operator explicitly named a repo.
 func herdrRepoFlags(scanner *bufio.Scanner) ([]string, error) {
-	fmt.Fprint(os.Stderr, "github repo to allow (owner/name, blank for no GitHub token): ")
+	fmt.Fprint(os.Stderr, "github repo to allow (owner/name, blank for no GitHub access): ")
 	if !scanner.Scan() {
 		return nil, &CodedError{Code: ErrCodeInternalError, Msg: "failed to read github repo"}
 	}
 	repo := strings.TrimSpace(scanner.Text())
 	if repo == "" {
-		return []string{"--no-builtin-gh"}, nil
+		return []string{}, nil
 	}
 	// Reject anything that is not owner/name before spending a build on it.
 	parts := strings.Split(repo, "/")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return nil, &UsageError{Msg: fmt.Sprintf("invalid repo %q: expected owner/name", repo)}
 	}
-	return []string{"--repo", repo}, nil
+	return []string{"--repo", repo, "--secret", "GH_TOKEN@github.com,api.github.com,uploads.github.com"}, nil
 }
 
 // herdrDefaultImage is the image offered by default in the herdr create
@@ -725,6 +726,14 @@ const herdrDefaultImage = "nexus3-agent-base"
 // always uses exec.CommandContext; tests override it to capture args without
 // spawning a real subprocess.
 var herdrExecCommandContext = exec.CommandContext
+
+// worktreeGitRunner is the seam for running git subcommands in tests.
+// Production code uses exec.Command("git", "-C", dir, args...); tests override
+// to drive trusted-ref resolution without a real git repo.
+var worktreeGitRunner = func(dir string, args ...string) ([]byte, error) {
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	return cmd.Output()
+}
 
 // herdrReadMountSpec reads one line from scanner and returns the --mount flag
 // pair when the user supplies a spec, or nil when the answer is blank.
@@ -2857,10 +2866,9 @@ func herdrWorkspaceRename(ctx context.Context, herdrBin, workspaceID, label stri
 // this function. An empty imageFlag produces an unbootable argv that
 // `sandbox create` will reject with exit status 2.
 //
-// --no-builtin-gh is always included: it gates whether the builtin GitHub
-// credential enters the sandbox. Omitting it silently grants access.
-// This is the SOLE place this flag is constructed for the worktree-sandbox
-// path; tests assert its presence here, not via side-channel inspection.
+// secrets are "--secret ENV@host1,host2" binds derived from the egress.secrets
+// section of the nexus3.yaml on the trusted ref (D-PDE-17). allowedRepo, when
+// non-empty, sets the per-repo GitHub path allowlist (--repo owner/name).
 //
 // --agent claude-code --egress open makes a worktree sandbox a full agent dev
 // environment: the operator's curated ~/.claude config (skills, CLAUDE.md,
@@ -2878,7 +2886,7 @@ func herdrWorkspaceRename(ctx context.Context, herdrBin, workspaceID, label stri
 // the main repo's .git directory so git is fully functional inside the guest
 // (D-PD-99-git: worktree .git resolution requires the main .git to be
 // reachable at its host absolute path inside the VM).
-func herdrWorktreeSandboxCreateArgs(handle, mountSpec, imageFlag, imageVal string, extraMounts []string) []string {
+func herdrWorktreeSandboxCreateArgs(handle, mountSpec, imageFlag, imageVal string, extraMounts, secrets []string, allowedRepo string) []string {
 	args := []string{imageFlag, imageVal, "--mount", mountSpec}
 	for _, m := range extraMounts {
 		args = append(args, "--mount", m)
@@ -2897,7 +2905,13 @@ func herdrWorktreeSandboxCreateArgs(handle, mountSpec, imageFlag, imageVal strin
 	if imageFlag == "--file" {
 		args = append(args, "--mount-named", herdrDockerDiskVolumeName(handle)+":/var/lib/docker:size=20g")
 	}
-	args = append(args, "--agent", "claude-code", "--egress", "open", "--no-builtin-gh", handle)
+	for _, s := range secrets {
+		args = append(args, "--secret", s)
+	}
+	if allowedRepo != "" {
+		args = append(args, "--repo", allowedRepo)
+	}
+	args = append(args, "--agent", "claude-code", "--egress", "open", handle)
 	return args
 }
 
@@ -2981,6 +2995,183 @@ func herdrWorktreeGitDirMount(worktreePath string) string {
 		return "" // unexpected structure; bail rather than mount the wrong dir
 	}
 	return gitDir + ":" + gitDir
+}
+
+// worktreeCommonGitDir returns the main repo's common git directory from a
+// linked worktree path, or "" if it cannot be derived. This is the same
+// directory computed by herdrWorktreeGitDirMount but returned as a plain path
+// rather than a mount spec.
+func worktreeCommonGitDir(worktreePath string) string {
+	data, err := os.ReadFile(filepath.Join(worktreePath, ".git"))
+	if err != nil {
+		return ""
+	}
+	line := strings.TrimSpace(string(data))
+	const prefix = "gitdir: "
+	if !strings.HasPrefix(line, prefix) {
+		return ""
+	}
+	target := strings.TrimPrefix(line, prefix)
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(worktreePath, target)
+	}
+	target = filepath.Clean(target)
+	worktreesDir := filepath.Dir(target)
+	gitDir := filepath.Dir(worktreesDir)
+	if filepath.Base(worktreesDir) != "worktrees" {
+		return ""
+	}
+	return gitDir
+}
+
+// readTrustedRefBytes reads the nexus3.yaml content from the operator-controlled
+// trusted ref in commonGitDir. The trusted ref is the origin default branch
+// (refs/remotes/origin/HEAD), never the worktree's checked-out branch.
+//
+// Returns (data, nil) when the file exists on the trusted ref.
+// Returns (nil, nil) — FAIL CLOSED — in all non-error conditions where the
+// config cannot be read:
+//   - no origin/HEAD (remote not fetched or no origin configured)
+//   - nexus3.yaml absent on the trusted ref
+//
+// Returns (nil, err) only for unexpected git failures that are not simply
+// "ref or file not found".
+func readTrustedRefBytes(commonGitDir string) ([]byte, error) {
+	// Resolve the origin default branch.
+	out, err := worktreeGitRunner(commonGitDir, "symbolic-ref", "refs/remotes/origin/HEAD")
+	if err != nil || len(bytes.TrimSpace(out)) == 0 {
+		// No origin/HEAD → fail closed; no auto-grant.
+		return nil, nil
+	}
+	ref := strings.TrimSpace(string(out))
+
+	// Read nexus3.yaml from the trusted ref — NEVER from the worktree branch.
+	data, err := worktreeGitRunner(commonGitDir, "show", ref+":nexus3.yaml")
+	if err != nil {
+		// File absent on trusted ref → fail closed; no auto-grant.
+		return nil, nil
+	}
+	return data, nil
+}
+
+// buildWorktreeEgressArgs derives the --secret and --repo CLI args from the
+// egress.secrets section of the nexus3.yaml read from the trusted ref.
+//
+// For each EgressSecret entry:
+//   - Non-GitHub host: emits "ENV@host1,host2" in secrets; paths: is stored in
+//     pathPolicies for future enforcement (non-GitHub hosts do not require a path policy).
+//   - GitHub host with explicit repo:: emits --repo owner/name (AllowedRepo).
+//   - GitHub host derivable from origin remote: emits --repo owner/name.
+//   - GitHub host with paths: but no repo:: surface error (paths: on GitHub not yet
+//     supported via the CLI subprocess path; use repo: instead).
+//   - GitHub host with NO policy (no repo:, no paths:, not derivable): return error
+//     (D-PDE-16 mandatory guard — refuse rather than grant unscoped access).
+//
+// The commonGitDir is used to derive the remote URL when a GitHub secret lacks an
+// explicit repo: field. worktreeGitRunner is the injectable seam.
+//
+// T3 hardening: derived owner or name equal to "." or ".." is rejected.
+func buildWorktreeEgressArgs(cfg config.Config, commonGitDir string) (secrets []string, allowedRepo string, pathPolicies domain.EgressPathPolicies, err error) {
+	for _, s := range cfg.Egress.Secrets {
+		if len(s.Hosts) == 0 {
+			continue
+		}
+		hostStr := strings.Join(s.Hosts, ",")
+		secrets = append(secrets, s.Env+"@"+hostStr)
+
+		hasGitHub := false
+		for _, h := range s.Hosts {
+			if domain.IsGitHubHost(strings.ToLower(h)) {
+				hasGitHub = true
+				break
+			}
+		}
+
+		if !hasGitHub {
+			// Non-GitHub: host+secret only; paths: stored for future per-placeholder enforcement.
+			if len(s.Paths) > 0 {
+				pathPolicies = egressAddPathsPolicy(pathPolicies, s.Hosts, s.Paths)
+			}
+			continue
+		}
+
+		// GitHub host: a path policy is required (D-PDE-16).
+		switch {
+		case s.Repo != "":
+			// Explicit owner/name.
+			owner, name, ok := strings.Cut(s.Repo, "/")
+			if !ok || owner == "" || name == "" {
+				return nil, "", nil, fmt.Errorf("egress secret %q: repo %q is not in owner/name format", s.Env, s.Repo)
+			}
+			// T3 hardening: reject "." and ".." segments.
+			if owner == "." || owner == ".." || name == "." || name == ".." {
+				return nil, "", nil, fmt.Errorf("egress secret %q: repo %q contains invalid segment (. or ..)", s.Env, s.Repo)
+			}
+			if allowedRepo != "" && allowedRepo != s.Repo {
+				return nil, "", nil, fmt.Errorf(
+					"egress secret %q: conflicting GitHub repos %q vs %q; "+
+						"multiple GitHub repos require per-placeholder path policies (not yet supported in worktree-sandbox path)",
+					s.Env, allowedRepo, s.Repo,
+				)
+			}
+			allowedRepo = s.Repo
+
+		case len(s.Paths) > 0:
+			// paths: on a GitHub host — valid policy but not serialisable via --repo.
+			return nil, "", nil, fmt.Errorf(
+				"egress secret %q targets GitHub host(s) %v with a paths: policy; "+
+					"paths: on GitHub hosts is not yet supported via the worktree-sandbox CLI path — use repo: instead",
+				s.Env, s.Hosts,
+			)
+
+		default:
+			// Try to derive from the origin remote URL.
+			derived := ""
+			if commonGitDir != "" {
+				if remOut, remErr := worktreeGitRunner(commonGitDir, "remote", "get-url", "origin"); remErr == nil {
+					remoteURL := strings.TrimSpace(string(remOut))
+					if owner, name, ok := deriveGitHubRepo(remoteURL); ok {
+						// T3 hardening: reject "." and ".." segments.
+						if owner != "." && owner != ".." && name != "." && name != ".." {
+							derived = owner + "/" + name
+						}
+					}
+				}
+			}
+			if derived == "" {
+				return nil, "", nil, fmt.Errorf(
+					"egress secret %q targets GitHub host(s) %v but has no path policy "+
+						"(no repo:, no paths:, and GitHub repo could not be derived from origin remote); "+
+						"refusing create to avoid unscoped access (D-PDE-16)",
+					s.Env, s.Hosts,
+				)
+			}
+			if allowedRepo != "" && allowedRepo != derived {
+				return nil, "", nil, fmt.Errorf(
+					"egress secret %q: conflicting GitHub repos %q vs %q (derived); "+
+						"multiple GitHub repos require per-placeholder path policies",
+					s.Env, allowedRepo, derived,
+				)
+			}
+			allowedRepo = derived
+		}
+	}
+	return secrets, allowedRepo, pathPolicies, nil
+}
+
+// egressAddPathsPolicy merges a paths: policy into pathPolicies under the
+// wildcard placeholder key "" for each host in hosts.
+func egressAddPathsPolicy(pp domain.EgressPathPolicies, hosts, paths []string) domain.EgressPathPolicies {
+	if pp == nil {
+		pp = make(domain.EgressPathPolicies)
+	}
+	if pp[""] == nil {
+		pp[""] = make(map[string]domain.EgressHostPolicy)
+	}
+	for _, h := range hosts {
+		pp[""][strings.ToLower(h)] = domain.EgressHostPolicy{Paths: paths}
+	}
+	return pp
 }
 
 // herdrResolveWorktreeImage resolves the bootable image flag pair for a
@@ -3175,7 +3366,7 @@ func herdrWorktreeSandbox(
 	openPane bool,
 	conditional bool,
 	auto bool,
-	createFn func(context.Context, string, string, string, string, []string) error,
+	createFn func(context.Context, string, string, string, string, []string, []string, string) error,
 	getFn func(context.Context, string) (domain.Sandbox, error),
 ) error {
 	// Step 1: idempotency.
@@ -3332,12 +3523,51 @@ func herdrWorktreeSandbox(
 		return nil
 	}
 
+	// Step 6.6: read egress config from operator-controlled trusted ref (Finding A /
+	// D-PDE-17). Never read from the worktree branch or working tree bytes.
+	// Fail closed: no trusted ref or absent nexus3.yaml → no auto-grant.
+	var (
+		egressSecrets     []string
+		egressAllowedRepo string
+		egressPathPolicies domain.EgressPathPolicies
+	)
+	commonGitDir := worktreeCommonGitDir(info.Path)
+	if commonGitDir != "" {
+		cfgBytes, refErr := readTrustedRefBytes(commonGitDir)
+		if refErr != nil {
+			fmt.Fprintf(w, "worktree-sandbox: read trusted ref config: %v\n", refErr)
+			if !failSafe {
+				return fmt.Errorf("worktree-sandbox: read trusted ref config: %w", refErr)
+			}
+			return nil
+		}
+		if cfgBytes != nil {
+			parsedCfg, parseErr := config.Parse(cfgBytes)
+			if parseErr != nil {
+				fmt.Fprintf(w, "worktree-sandbox: parse trusted ref nexus3.yaml: %v\n", parseErr)
+				if !failSafe {
+					return fmt.Errorf("worktree-sandbox: parse trusted ref nexus3.yaml: %w", parseErr)
+				}
+				return nil
+			}
+			egressSecrets, egressAllowedRepo, egressPathPolicies, err = buildWorktreeEgressArgs(parsedCfg, commonGitDir)
+			if err != nil {
+				fmt.Fprintf(w, "worktree-sandbox: build egress args: %v\n", err)
+				if !failSafe {
+					return fmt.Errorf("worktree-sandbox: build egress args: %w", err)
+				}
+				return nil
+			}
+		}
+	}
+	_ = egressPathPolicies // PathPolicies carried via Envelope for direct-service-call path; CLI subprocess uses --repo
+
 	// Step 7: create sandbox. A 90 s context covers image pull, ext4 setup,
 	// and VM boot on typical hardware. Explicit mode failures are real errors;
 	// auto/conditional mode is fail-safe (workspace stays a host shell).
 	createCtx, createCancel := context.WithTimeout(ctx, herdrWorktreeCreateTimeout)
 	defer createCancel()
-	if err := createFn(createCtx, handle, mountSpec, imageFlag, imageVal, extraMounts); err != nil {
+	if err := createFn(createCtx, handle, mountSpec, imageFlag, imageVal, extraMounts, egressSecrets, egressAllowedRepo); err != nil {
 		fmt.Fprintf(w, "worktree-sandbox: sandbox create: %v\n", err)
 		if !failSafe {
 			return fmt.Errorf("worktree-sandbox: sandbox create: %w", err)

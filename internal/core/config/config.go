@@ -29,12 +29,148 @@ const SupportedVersion = 1
 // Files declaring a version below this must be re-created before use.
 const MinSupportedVersion = 1
 
+// EgressSecret is one entry in the egress.secrets list.
+// It binds a host-side env var to a set of target hosts.
+//
+// Short form (scalar in the YAML sequence):
+//
+//	"ENV@host1,host2"
+//
+// Long form (mapping in the YAML sequence):
+//
+//	env: ENV
+//	hosts: [host1, host2]
+//	repo: owner/name       # optional; GitHub sugar
+//	paths: ["/v1/**"]      # optional; generic path allowlist
+type EgressSecret struct {
+	// Env is the name of the host env var whose value is injected as a
+	// Bearer / Authorization token for the listed hosts.
+	Env string `yaml:"env"`
+
+	// Hosts is the list of hostnames the secret is forwarded to.
+	Hosts []string `yaml:"hosts"`
+
+	// Repo is an optional "owner/name" GitHub repository. When set the
+	// built-in method-aware GitHub path matcher is activated for this entry.
+	Repo string `yaml:"repo"`
+
+	// Paths is an optional generic positive path allowlist (anchored globs,
+	// optional "METHOD " prefix) applied to every host in Hosts.
+	Paths []string `yaml:"paths"`
+}
+
+// EgressSecrets is a list of EgressSecret entries. Each element may be either
+// a short scalar "ENV@host1,host2" or a long mapping form.
+type EgressSecrets []EgressSecret
+
+// UnmarshalYAML implements yaml.Unmarshaler so that each element of a YAML
+// sequence may be either a scalar string "ENV@host1,host2" or a long mapping.
+func (s *EgressSecrets) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind != yaml.SequenceNode {
+		return fmt.Errorf("config: egress.secrets must be a YAML sequence, got kind %d", value.Kind)
+	}
+	out := make(EgressSecrets, 0, len(value.Content))
+	for _, item := range value.Content {
+		switch item.Kind {
+		case yaml.ScalarNode:
+			// Short form: "ENV@host1,host2"
+			entry, err := parseEgressSecretShort(item.Value)
+			if err != nil {
+				return fmt.Errorf("config: egress.secrets entry: %w", err)
+			}
+			out = append(out, entry)
+		case yaml.MappingNode:
+			// Long form: {env, hosts, repo?, paths?}
+			// Manually check for unknown keys before decoding.
+			knownKeys := map[string]bool{"env": true, "hosts": true, "repo": true, "paths": true}
+			for i := 0; i+1 < len(item.Content); i += 2 {
+				k := item.Content[i].Value
+				if !knownKeys[k] {
+					return fmt.Errorf("config: egress.secrets entry: unknown key %q", k)
+				}
+			}
+			var entry EgressSecret
+			if err := item.Decode(&entry); err != nil {
+				return fmt.Errorf("config: egress.secrets entry: %w", err)
+			}
+			if entry.Env == "" {
+				return fmt.Errorf("config: egress.secrets entry: missing required field 'env'")
+			}
+			if len(entry.Hosts) == 0 {
+				return fmt.Errorf("config: egress.secrets entry: missing required field 'hosts'")
+			}
+			out = append(out, entry)
+		default:
+			return fmt.Errorf("config: egress.secrets entry must be a string or mapping, got YAML kind %d", item.Kind)
+		}
+	}
+	*s = out
+	return nil
+}
+
+// parseEgressSecretShort parses a short-form "ENV@host1,host2[,hostN]" secret spec.
+func parseEgressSecretShort(spec string) (EgressSecret, error) {
+	if spec == "" {
+		return EgressSecret{}, fmt.Errorf("empty spec")
+	}
+	at := -1
+	for i, c := range spec {
+		if c == '@' {
+			at = i
+			break
+		}
+	}
+	if at < 0 {
+		return EgressSecret{}, fmt.Errorf("%q: want ENV@host[,host…]", spec)
+	}
+	env := spec[:at]
+	if env == "" {
+		return EgressSecret{}, fmt.Errorf("%q: env name must not be empty", spec)
+	}
+	hostPart := spec[at+1:]
+	if hostPart == "" {
+		return EgressSecret{}, fmt.Errorf("%q: hosts must not be empty", spec)
+	}
+	// Split comma-separated hosts.
+	rawHosts := splitComma(hostPart)
+	hosts := make([]string, 0, len(rawHosts))
+	for _, h := range rawHosts {
+		if h == "" {
+			return EgressSecret{}, fmt.Errorf("%q: empty host in list", spec)
+		}
+		hosts = append(hosts, h)
+	}
+	if len(hosts) == 0 {
+		return EgressSecret{}, fmt.Errorf("%q: hosts must not be empty", spec)
+	}
+	return EgressSecret{Env: env, Hosts: hosts}, nil
+}
+
+// splitComma splits s on commas; not strings.Split to avoid importing strings.
+func splitComma(s string) []string {
+	var out []string
+	start := 0
+	for i := 0; i <= len(s); i++ {
+		if i == len(s) || s[i] == ',' {
+			out = append(out, s[start:i])
+			start = i + 1
+		}
+	}
+	return out
+}
+
 // EgressConfig holds per-repo egress allow rules.
 type EgressConfig struct {
 	// Allow lists additional hostnames the sandbox may reach.
 	// These are merged on top of the built-in perimeter allowlist by the
 	// precedence resolver; they do not replace it.
 	Allow []string `yaml:"allow"`
+
+	// Secrets lists host+credential bindings. Each entry attaches one env var
+	// (looked up from the host environment) to one or more target hostnames.
+	// Unlike Allow (reachability only), Secrets entries attach a credential and
+	// are therefore security-critical — read from the trusted base ref only.
+	Secrets EgressSecrets `yaml:"secrets"`
 }
 
 // Mounts is a list of host→guest mount entries in nexus3.yaml.
@@ -259,6 +395,17 @@ func parse(data []byte) (Config, error) {
 		Image:   fc.Image,
 		Builder: fc.Builder,
 	}, nil
+}
+
+// Parse decodes YAML data into a Config, rejecting any unknown keys.
+// It is a public wrapper around the unexported parse function, intended for
+// callers that obtain config bytes out-of-band (e.g. via `git show <ref>:nexus3.yaml`)
+// rather than through the filesystem walk performed by Load.
+//
+// Parse and Load apply identical validation; the only difference is the source
+// of the YAML bytes.
+func Parse(data []byte) (Config, error) {
+	return parse(data)
 }
 
 // hasGitRoot returns true when dir contains a .git entry (file or directory),

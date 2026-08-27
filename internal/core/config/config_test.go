@@ -655,6 +655,145 @@ func TestMounts_MissingTarget(t *testing.T) {
 	}
 }
 
+// ---- egress.secrets tests ----
+
+// parseBytes is a helper that calls config.Parse on the given bytes.
+func parseBytes(t *testing.T, data []byte) (config.Config, error) {
+	t.Helper()
+	return config.Parse(data)
+}
+
+func TestEgressSecrets_ShortForm(t *testing.T) {
+	data := []byte("version: 1\negress:\n  secrets:\n    - GH_TOKEN@api.github.com,uploads.github.com\n")
+	cfg, err := parseBytes(t, data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(cfg.Egress.Secrets) != 1 {
+		t.Fatalf("want 1 secret, got %d", len(cfg.Egress.Secrets))
+	}
+	s := cfg.Egress.Secrets[0]
+	if s.Env != "GH_TOKEN" {
+		t.Errorf("Env: want GH_TOKEN, got %q", s.Env)
+	}
+	if len(s.Hosts) != 2 || s.Hosts[0] != "api.github.com" || s.Hosts[1] != "uploads.github.com" {
+		t.Errorf("Hosts: want [api.github.com uploads.github.com], got %v", s.Hosts)
+	}
+}
+
+func TestEgressSecrets_LongForm_GitHub(t *testing.T) {
+	data := []byte("version: 1\negress:\n  secrets:\n    - env: GH_TOKEN\n      hosts: [api.github.com]\n      repo: owner/myrepo\n")
+	cfg, err := parseBytes(t, data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(cfg.Egress.Secrets) != 1 {
+		t.Fatalf("want 1 secret, got %d", len(cfg.Egress.Secrets))
+	}
+	s := cfg.Egress.Secrets[0]
+	if s.Env != "GH_TOKEN" {
+		t.Errorf("Env: want GH_TOKEN, got %q", s.Env)
+	}
+	if s.Repo != "owner/myrepo" {
+		t.Errorf("Repo: want owner/myrepo, got %q", s.Repo)
+	}
+}
+
+func TestEgressSecrets_LongForm_GenericPaths(t *testing.T) {
+	data := []byte("version: 1\negress:\n  secrets:\n    - env: GITLAB_TOKEN\n      hosts: [gitlab.com]\n      paths: [\"/v4/projects/123/**\"]\n")
+	cfg, err := parseBytes(t, data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(cfg.Egress.Secrets) != 1 {
+		t.Fatalf("want 1 secret, got %d", len(cfg.Egress.Secrets))
+	}
+	s := cfg.Egress.Secrets[0]
+	if s.Env != "GITLAB_TOKEN" {
+		t.Errorf("Env: want GITLAB_TOKEN, got %q", s.Env)
+	}
+	if len(s.Paths) != 1 || s.Paths[0] != "/v4/projects/123/**" {
+		t.Errorf("Paths: want [\"/v4/projects/123/**\"], got %v", s.Paths)
+	}
+}
+
+// TestEgressSecrets_UnknownKey_HardError verifies AC T2-AC3:
+// an unknown key inside egress.secrets[] is a hard error (fail-closed on typo).
+func TestEgressSecrets_UnknownKey_HardError(t *testing.T) {
+	data := []byte("version: 1\negress:\n  secrets:\n    - env: GH_TOKEN\n      hosts: [api.github.com]\n      typo_key: oops\n")
+	_, err := parseBytes(t, data)
+	if err == nil {
+		t.Fatal("want error for unknown key inside egress.secrets entry, got nil")
+	}
+}
+
+func TestEgressSecrets_MissingEnv_Error(t *testing.T) {
+	data := []byte("version: 1\negress:\n  secrets:\n    - hosts: [api.github.com]\n")
+	_, err := parseBytes(t, data)
+	if err == nil {
+		t.Fatal("want error for missing 'env' field, got nil")
+	}
+}
+
+func TestEgressSecrets_MissingHosts_Error(t *testing.T) {
+	data := []byte("version: 1\negress:\n  secrets:\n    - env: GH_TOKEN\n")
+	_, err := parseBytes(t, data)
+	if err == nil {
+		t.Fatal("want error for missing 'hosts' field, got nil")
+	}
+}
+
+func TestEgressSecrets_Absent_ZeroValue(t *testing.T) {
+	data := []byte("version: 1\negress:\n  allow: [proxy.golang.org]\n")
+	cfg, err := parseBytes(t, data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if len(cfg.Egress.Secrets) != 0 {
+		t.Fatalf("want zero secrets when absent, got %d", len(cfg.Egress.Secrets))
+	}
+}
+
+// TestParse_EqualsLoad_ForIdenticalBytes verifies that config.Parse and config.Load
+// produce the same result when given the same YAML content.
+func TestParse_EqualsLoad_ForIdenticalBytes(t *testing.T) {
+	data := []byte("version: 1\negress:\n  allow: [proxy.golang.org]\n  secrets:\n    - GH_TOKEN@api.github.com\n")
+
+	parsedCfg, err := config.Parse(data)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, ".git"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "nexus3.yaml"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	loadedCfg, _, err := config.Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	// Compare Allow.
+	if len(parsedCfg.Egress.Allow) != len(loadedCfg.Egress.Allow) {
+		t.Errorf("Egress.Allow len: Parse=%d Load=%d", len(parsedCfg.Egress.Allow), len(loadedCfg.Egress.Allow))
+	}
+	// Compare Secrets.
+	if len(parsedCfg.Egress.Secrets) != len(loadedCfg.Egress.Secrets) {
+		t.Errorf("Egress.Secrets len: Parse=%d Load=%d", len(parsedCfg.Egress.Secrets), len(loadedCfg.Egress.Secrets))
+	} else if len(parsedCfg.Egress.Secrets) > 0 {
+		p, l := parsedCfg.Egress.Secrets[0], loadedCfg.Egress.Secrets[0]
+		if p.Env != l.Env {
+			t.Errorf("Secrets[0].Env: Parse=%q Load=%q", p.Env, l.Env)
+		}
+		if len(p.Hosts) != len(l.Hosts) {
+			t.Errorf("Secrets[0].Hosts: Parse=%v Load=%v", p.Hosts, l.Hosts)
+		}
+	}
+}
+
 // slicesEqual compares two string slices for equality.
 func slicesEqual(a, b []string) bool {
 	if len(a) != len(b) {

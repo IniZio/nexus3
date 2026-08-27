@@ -25,6 +25,45 @@
             "description": "Hostname, e.g. \"proxy.golang.org\"."
           },
           "default": []
+        },
+        "secrets": {
+          "type": "array",
+          "description": "Host+credential bindings. Each entry attaches one env var (from the host environment) to one or more target hostnames. Security-critical: read from the trusted base ref only.",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "Short form: \"ENV@host1,host2\"."
+              },
+              {
+                "type": "object",
+                "description": "Long form: {env, hosts, repo?, paths?}.",
+                "required": ["env", "hosts"],
+                "additionalProperties": false,
+                "properties": {
+                  "env": {
+                    "type": "string",
+                    "description": "Name of the host env var whose value is injected as a credential."
+                  },
+                  "hosts": {
+                    "type": "array",
+                    "description": "Hostnames the credential is forwarded to.",
+                    "items": { "type": "string" }
+                  },
+                  "repo": {
+                    "type": "string",
+                    "description": "Optional \"owner/name\" GitHub repository. Activates the built-in method-aware GitHub path matcher."
+                  },
+                  "paths": {
+                    "type": "array",
+                    "description": "Optional generic positive path allowlist (anchored globs, optional \"METHOD \" prefix).",
+                    "items": { "type": "string" }
+                  }
+                }
+              }
+            ]
+          },
+          "default": []
         }
       }
     },

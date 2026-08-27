@@ -21,7 +21,16 @@ import (
 // herdrWorktreeSandbox calls for the same workspace and asserts that exactly
 // one sandbox create is issued.  The loser must not leave an orphan.
 func TestHerdrWorktreeSandboxConcurrentCreateConverges(t *testing.T) {
-	t.Parallel()
+	// Not t.Parallel: this test uses t.Setenv (below), which is incompatible
+	// with parallel tests.
+
+	// herdrWorktreeSandbox resolves the herdr binary (Step 2) before it ever
+	// reaches createFn. resolveHerdrBin honors HERDR_BIN_PATH first, without
+	// checking the path exists, so set it here. Without this the test passes
+	// only on machines that happen to have `herdr` on PATH (e.g. a dev box) and
+	// hangs in CI — resolveHerdrBin errors, herdrWorktreeSandbox returns early,
+	// and createFn is never called.
+	t.Setenv("HERDR_BIN_PATH", "herdr-stub-not-executed")
 
 	storeRoot := t.TempDir()
 	ctx := context.Background()

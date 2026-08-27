@@ -60,22 +60,46 @@ egress:
     - sum.golang.org
     - storage.googleapis.com
 
+  # Path policies: destination-scoped allowlists (host-keyed).
+  policy:
+    # GitHub: policy entries define the allowed paths for this repo.
+    - host: github.com
+      paths: ["/owner/name/**"]
+    - host: api.github.com
+      paths: ["/repos/owner/name/**", "/repos/owner/name", "/user"]
+    - host: uploads.github.com
+      paths: ["/**"]
+
+    # Generic per-host path allowlist (any provider).
+    - host: api.example.com
+      paths: ["/v4/projects/123/**"]
+
+  # SECURITY WARNING — GitHub glob tightness is the author's responsibility.
+  # The policy layer is generic default-deny globs; the system cannot automatically
+  # narrow what you write. For GitHub hosts you MUST:
+  #   • Scope every api.github.com path to /repos/<owner>/<repo>/** (plus specific
+  #     endpoints like /repos/<owner>/<repo> and /user). Do NOT write /** or / at root.
+  #   • Do NOT list /graphql under api.github.com. GraphQL is a parallel write channel
+  #     that bypasses path-allowlist semantics; listing it reopens the sole-bound risk
+  #     (the operator's full-scope token becomes the only protection).
+  #   • Do NOT list /** under github.com.
+  # An unscoped or /graphql-listing GitHub glob reopens the sole-bound risk.
+  # A stricter parse-time graphql lint (automatic floor) is a future TBD option.
+
   # Brokered VCS/API secrets — injected as 64-hex placeholders in the guest;
   # real token swapped host-side by the MITM proxy (PDF-R-020).
   secrets:
-    # GitHub: repo: is mandatory (path policy guard — create is refused without it).
+    # GitHub
     - env: GH_TOKEN
       hosts: [github.com, api.github.com, uploads.github.com]
-      repo: owner/name
 
-    # Non-GitHub: no mandatory path policy.
+    # Non-GitHub
     - env: GITLAB_TOKEN
       hosts: [gitlab.com]
 
-    # Generic per-host path allowlist (any provider).
+    # Generic API token
     - env: API_TOKEN
       hosts: [api.example.com]
-      paths: ["/v4/projects/123/**"]
 
 # Default sandbox settings for this repo.
 sandbox:

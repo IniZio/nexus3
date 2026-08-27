@@ -597,34 +597,51 @@ Normalize the URL to `host` + `owner/name`:
 
 If the project has no git remote or uses a non-git VCS, determine the host explicitly and declare it in `hosts:`.
 
-### Step 2 — Author the `egress.secrets` entry in `nexus3.yaml`
+### Step 2 — Author the `egress.policy` and `egress.secrets` entries in `nexus3.yaml`
 
-`egress.secrets` lives in `nexus3.yaml` at the repo root (same file as `sandbox.image`, `egress.allow`, etc.). Add or extend the `egress` key; do not create a separate file.
+`egress.policy` and `egress.secrets` live in `nexus3.yaml` at the repo root (same file as `sandbox.image`, `egress.allow`, etc.). Add or extend the `egress` key; do not create a separate file.
 
 #### GitHub
 
-GitHub hosts **require** a path policy (`repo:` or `paths:`). Without one, `sandbox create` is refused with a hard error. Use `repo:` for the standard case.
+GitHub hosts **require** a policy entry. Without one, `sandbox create` is refused with a hard error. List the specific API paths your workflow needs under `paths:`. The MITM proxy enforces default-deny — only listed paths are forwarded; cross-repo API calls and GraphQL are denied by omission.
 
 ```yaml
 version: 1
 egress:
+  policy:
+    - host: github.com
+      paths: ["/acme/myrepo/**"]
+    - host: api.github.com
+      paths: ["/repos/acme/myrepo/**", "/repos/acme/myrepo", "/user"]
+    - host: uploads.github.com
+      paths: ["/**"]
   secrets:
     - env: GH_TOKEN
       hosts: [github.com, api.github.com, uploads.github.com]
-      repo: acme/myrepo      # mandatory for github hosts — path policy
 ```
 
-The `repo:` field activates the built-in method-aware GitHub path matcher for that repository. Cross-repo API calls and `gh api graphql` (GraphQL) are denied (403) even with the entry present.
+Cross-repo API calls and `gh api graphql` (GraphQL) are denied (403) by default because they are not listed in the path allowlist — not in the configuration entries.
 
-Short form (equivalent, no path policy supported — **not valid for github hosts** because the guard requires `repo:` or `paths:`):
+> **SECURITY WARNING — GitHub glob tightness is the author's responsibility.**
+> The `egress.policy` layer is generic default-deny globs; the system cannot automatically narrow what you write. When authoring GitHub entries you MUST:
+>
+> - **Scope every `api.github.com` path to `/repos/<owner>/<repo>/**`** (plus specific endpoints like `/repos/<owner>/<repo>` and `/user`). Do **not** write `/**` or `/` at the root — that would let a compromised guest reach other repos and perform any API action with the operator's full-scope token.
+> - **Do not list `/graphql`** under `api.github.com`. GraphQL is a parallel write channel that bypasses path-allowlist semantics; listing it reopens the sole-bound risk documented in the security notes (`nexus3-github-token-sole-bound`). The unconditional `/graphql` backstop only fires on the legacy CLI `GitHubPolicy` path — it does **not** apply to config-authored globs.
+> - **Do not list `/**` under `github.com`** — that exposes all repository HTML and raw download paths across the entire platform.
+>
+> An unscoped or `/graphql`-listing GitHub glob **reopens the sole-bound risk**: the operator's unrotated full-scope token becomes the only protection. Treat the path list as the security perimeter, not as a convenience filter.
+>
+> A stricter parse-time graphql lint (automatic floor for config-authored globs) is available as an optional follow-up (TBD) if the operator wants the hard block back.
+
+Short form (equivalent for secrets, no path policy support — **not valid for github hosts** because policy entries are mandatory):
 
 ```yaml
 egress:
   secrets:
-    - GH_TOKEN@github.com,api.github.com,uploads.github.com   # REJECTED: missing path policy
+    - GH_TOKEN@github.com,api.github.com,uploads.github.com   # REJECTED: missing policy entries
 ```
 
-Do not use the short form for GitHub. Use the long form with `repo:`.
+Do not use the short form for GitHub. Use the long form with policy entries and secrets.
 
 #### GitLab (cloud or self-hosted)
 
@@ -645,7 +662,7 @@ version: 1
 egress:
   secrets:
     - env: GITLAB_TOKEN
-      hosts: [git.example.com, git.example.com]   # adjust to your instance hostname
+      hosts: [git.example.com]   # adjust to your instance hostname
 ```
 
 Short form also accepted for non-GitHub hosts:
@@ -658,15 +675,17 @@ egress:
 
 #### Generic — path-restricted API token
 
-Use `paths:` for a host where you want to restrict which URL paths the token is forwarded to:
+Use `paths:` in a policy entry to restrict which URL paths the token is forwarded to:
 
 ```yaml
 version: 1
 egress:
+  policy:
+    - host: api.example.com
+      paths: ["/v4/projects/123/**"]
   secrets:
     - env: API_TOKEN
       hosts: [api.example.com]
-      paths: ["/v4/projects/123/**"]
 ```
 
 Paths are anchored globs. An optional `METHOD ` prefix restricts to one HTTP verb (e.g. `"GET /v4/projects/123/**"`).

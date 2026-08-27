@@ -357,7 +357,6 @@ type sandboxCreateFlags struct {
 	diskMaxGiB       uint32   // --disk-max <GiB>:   disk grow ceiling
 	builderMemoryMiB uint32   // --builder-memory <MiB>: builder VM RAM (0 = use default 8192 MiB; min 1024 when set)
 	secrets          []string // --secret ENV@host[,host…] (repeatable)
-	noBuiltinGH  bool     // --no-builtin-gh: skip host gh auth token bind
 	egressClosed bool     // --egress closed: disable open egress (D-PD-33)
 	// egressExplicit records that --egress was actually passed, so that
 	// --agent can refuse an explicit "open" without also refusing the default.
@@ -699,8 +698,6 @@ func parseSandboxCreateArgs(args []string) (sandboxCreateFlags, error) {
 			}
 			i++
 			f.secrets = append(f.secrets, args[i])
-		case "--no-builtin-gh":
-			f.noBuiltinGH = true
 		case "--no-share-settings":
 			f.noShareSettings = true
 		case "--no-user-mounts":
@@ -961,26 +958,6 @@ func guestBootCmdline(mounts []agent.GuestMount, pid1Args, sandboxHandle string)
 // Without --agent this is the identity function on the flags: no profile, the
 // user's --allow-host list verbatim, and egress open unless --egress closed.
 
-// suppressBuiltinGitHub reports whether the builtin `gh auth token` bind
-// should be dropped for this create.
-//
-// D-SHL-05: an agent sandbox MAY carry a GitHub secret, but only when --repo
-// scopes it to one repository. So the builtin is suppressed for an agent
-// sandbox only when no --repo was given — keeping the convenience that an
-// ordinary agent sandbox is not refused a create over a credential the
-// operator never asked for, without discarding the credential in the case the
-// decision exists to enable.
-//
-// This lives in its own function so a test can call the real condition rather
-// than restate it. The rule this replaces ("an agent sandbox never carries a
-// GitHub secret", D-PD-23) was implemented in three separate places; lifting
-// it in the service layer alone left this one silently enforcing the reversed
-// decision, and a live run booted an agent sandbox with --repo set, the
-// service layer willing, and no GitHub credential anywhere.
-func suppressBuiltinGitHub(agentName, allowedRepo string) bool {
-	return agentName != "" && allowedRepo == ""
-}
-
 func resolveAgentPosture(f sandboxCreateFlags) (cred.AgentProfile, []string, bool) {
 	if f.agentName == "" {
 		return cred.AgentProfile{}, f.allowHosts, !f.egressClosed
@@ -1194,7 +1171,7 @@ func runSandboxCreate(ctx context.Context, args []string, out *Output, svc *serv
 	}
 
 	if len(f.positionals) != 1 {
-		return &UsageError{Msg: "sandbox create: usage: sandbox create <project>/<name> [--rm] [--image <ref>|--rootfs <path>|--file <context-dir>] [--dockerfile <path>] [--memory <MiB>] [--vcpus <n>] [--label KEY=VALUE] [--nested] [--mount <host>:<guest>[:ro]] [--mount-named <volume>:<guest>[:ro]] [--workspace <host-path>] [--capture-max <size>] [--builder-memory <MiB>] [--memory-max <MiB>] [--vcpus-max <n>] [--disk-max <GiB>] [--secret ENV@host[,host…]] [--egress <mode>] [--allow-host <host>] [--repo <owner>/<name>] [--branches <ref>[,ref…]] [--no-builtin-gh] [--no-share-settings] [--no-user-mounts] [--agent <name>] [--force] (auto-resize is unconditional: hotplug hardware is configured at create time; the dynamic governor activates only in the supervisor process)"}
+		return &UsageError{Msg: "sandbox create: usage: sandbox create <project>/<name> [--rm] [--image <ref>|--rootfs <path>|--file <context-dir>] [--dockerfile <path>] [--memory <MiB>] [--vcpus <n>] [--label KEY=VALUE] [--nested] [--mount <host>:<guest>[:ro]] [--mount-named <volume>:<guest>[:ro]] [--workspace <host-path>] [--capture-max <size>] [--builder-memory <MiB>] [--memory-max <MiB>] [--vcpus-max <n>] [--disk-max <GiB>] [--secret ENV@host[,host…]] [--egress <mode>] [--allow-host <host>] [--repo <owner>/<name>] [--branches <ref>[,ref…]] [--no-share-settings] [--no-user-mounts] [--agent <name>] [--force] (auto-resize is unconditional: hotplug hardware is configured at create time; the dynamic governor activates only in the supervisor process)"}
 	}
 
 	project, name, err := domain.ParseHandle(f.positionals[0])
@@ -1816,24 +1793,6 @@ func runSandboxCreate(ctx context.Context, args []string, out *Output, svc *serv
 		bootLiveMounts = append(bootLiveMounts, lm)
 	}
 
-	// D-SHL-05: an agent sandbox MAY carry a GitHub secret bind, but only when
-	// --repo scopes it to a single repository. The builtin `gh auth token` bind
-	// is therefore suppressed for an agent sandbox only when no --repo was given.
-	//
-	// Without the --repo condition this suppression silently defeats the whole
-	// outbound path: the service layer permits the bind, the supervisor is ready
-	// to seed it, and the sandbox still boots with no GitHub credential at all —
-	// which is exactly what a live run produced before this was found. The rule
-	// "an agent sandbox never carries a GitHub secret" was implemented in three
-	// places; lifting it in the service layer alone left this one enforcing the
-	// reversed decision.
-	//
-	// The suppression is kept for the no---repo case so that an ordinary agent
-	// sandbox is not refused a create for a credential the user never asked for.
-	if suppressBuiltinGitHub(f.agentName, f.allowedRepo) {
-		f.noBuiltinGH = true
-	}
-
 	secrets, err := resolveCreateSecrets(ctx, f)
 	if err != nil {
 		return errSandbox("sandbox create", err)
@@ -1876,7 +1835,7 @@ func runSandboxCreate(ctx context.Context, args []string, out *Output, svc *serv
 	}
 
 	// D-PD-33: closed-egress path — ensure GitHub goes into SecretHosts even
-	// if `--no-builtin-gh` was passed or `gh auth token` is unavailable.
+	// if no --secret GH_TOKEN@ was passed or `gh auth token` is unavailable.
 	// github.com / api.github.com / uploads.github.com must appear in
 	// SecretHosts so the MITM proxy intercepts them; they must NEVER be added
 	// to AllowedHosts (which would bypass the deny-all ACL).
@@ -2052,9 +2011,10 @@ func runSandboxCreate(ctx context.Context, args []string, out *Output, svc *serv
 	return nil
 }
 
-// resolveCreateSecrets parses --secret flags and, unless --no-builtin-gh,
-// appends the host `gh auth token` as GH_TOKEN@github.com,api.github.com.
-// Explicit GH_TOKEN / GITHUB_TOKEN binds win over the builtin.
+// resolveCreateSecrets parses --secret flags. No GitHub secret is added
+// automatically; callers must pass --secret GH_TOKEN@github.com explicitly
+// (D-PDE-02). The D-PD-36 guard still refuses any GitHub-touching bind when
+// --repo is absent.
 func resolveCreateSecrets(ctx context.Context, f sandboxCreateFlags) ([]service.SecretBind, error) {
 	var binds []service.SecretBind
 	for _, spec := range f.secrets {
@@ -2064,27 +2024,18 @@ func resolveCreateSecrets(ctx context.Context, f sandboxCreateFlags) ([]service.
 		}
 		binds = append(binds, b)
 	}
-	if !f.noBuiltinGH {
-		builtin, ok, err := service.BuiltinGitHubSecret(ctx)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			binds = service.MergeSecrets(binds, builtin)
-		}
-	}
 	// D-PD-36: if any resolved secret bind covers a GitHub host and AllowedRepo
 	// is not set, the operator's full-scope token would be unbounded — every
 	// repository the account can reach is accessible. Refuse with an actionable
 	// error. The --egress closed path is caught earlier at parse time; this
-	// guard covers every other path (open-egress with builtin, explicit --secret
-	// binds that name GitHub hosts, etc.).
+	// guard covers every other path (explicit --secret binds that name GitHub
+	// hosts, etc.).
 	if f.allowedRepo == "" {
 		for _, b := range binds {
 			if service.SecretTouchesGitHub(b) {
 				return nil, &UsageError{Msg: "sandbox create: GitHub credential would be " +
 					"unbounded (D-PD-36): pass --repo owner/name to scope the per-repo " +
-					"path allowlist, or --no-builtin-gh to skip the GitHub token"}
+					"path allowlist"}
 			}
 		}
 	}

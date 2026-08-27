@@ -1,20 +1,23 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/IniZio/nexus3/internal/core/config"
+	"github.com/IniZio/nexus3/internal/core/domain"
 )
 
 // TestHerdrWorktreeSandboxCreateArgs verifies the args produced by herdrWorktreeSandboxCreateArgs.
 func TestHerdrWorktreeSandboxCreateArgs(t *testing.T) {
 	t.Run("no secrets no allowedRepo", func(t *testing.T) {
-		args := herdrWorktreeSandboxCreateArgs("owner/branch", "src:dst", "--image", "myimage", nil, nil, "")
+		args := herdrWorktreeSandboxCreateArgs("owner/branch", "src:dst", "--image", "myimage", nil, nil, "", nil)
 		joined := strings.Join(args, " ")
 		if strings.Contains(joined, "--secret") {
 			t.Errorf("unexpected --secret in args: %v", args)
@@ -29,7 +32,7 @@ func TestHerdrWorktreeSandboxCreateArgs(t *testing.T) {
 
 	t.Run("one GitHub secret plus allowedRepo", func(t *testing.T) {
 		args := herdrWorktreeSandboxCreateArgs("owner/branch", "src:dst", "--image", "myimage", nil,
-			[]string{"GH_TOKEN@github.com"}, "owner/repo")
+			[]string{"GH_TOKEN@github.com"}, "owner/repo", nil)
 		joined := strings.Join(args, " ")
 		if !strings.Contains(joined, "--secret GH_TOKEN@github.com") {
 			t.Errorf("expected --secret GH_TOKEN@github.com in args: %v", args)
@@ -44,7 +47,7 @@ func TestHerdrWorktreeSandboxCreateArgs(t *testing.T) {
 
 	t.Run("GitLab secret no allowedRepo", func(t *testing.T) {
 		args := herdrWorktreeSandboxCreateArgs("owner/branch", "src:dst", "--image", "myimage", nil,
-			[]string{"GITLAB_TOKEN@gitlab.com"}, "")
+			[]string{"GITLAB_TOKEN@gitlab.com"}, "", nil)
 		joined := strings.Join(args, " ")
 		if !strings.Contains(joined, "--secret GITLAB_TOKEN@gitlab.com") {
 			t.Errorf("expected --secret GITLAB_TOKEN@gitlab.com in args: %v", args)
@@ -58,7 +61,7 @@ func TestHerdrWorktreeSandboxCreateArgs(t *testing.T) {
 	})
 
 	t.Run("--file imageFlag produces docker disk flag", func(t *testing.T) {
-		args := herdrWorktreeSandboxCreateArgs("myhandle", "src:dst", "--file", "/some/dir", nil, nil, "")
+		args := herdrWorktreeSandboxCreateArgs("myhandle", "src:dst", "--file", "/some/dir", nil, nil, "", nil)
 		joined := strings.Join(args, " ")
 		if !strings.Contains(joined, "--mount-named") {
 			t.Errorf("expected --mount-named for --file path: %v", args)
@@ -69,7 +72,7 @@ func TestHerdrWorktreeSandboxCreateArgs(t *testing.T) {
 	})
 
 	t.Run("--image imageFlag does not produce docker disk flag", func(t *testing.T) {
-		args := herdrWorktreeSandboxCreateArgs("myhandle", "src:dst", "--image", "ref", nil, nil, "")
+		args := herdrWorktreeSandboxCreateArgs("myhandle", "src:dst", "--image", "ref", nil, nil, "", nil)
 		joined := strings.Join(args, " ")
 		if strings.Contains(joined, "--mount-named") {
 			t.Errorf("unexpected --mount-named for --image path: %v", args)
@@ -379,4 +382,56 @@ func TestReadTrustedRefBytes_FileAbsent(t *testing.T) {
 	if data != nil {
 		t.Errorf("expected nil data (fail closed), got %v", data)
 	}
+}
+
+// TestHerdrWorktreeSandboxCreateArgs_PathPolicies verifies that non-empty
+// pathPolicies produces --egress-policy-json in the args and that empty/nil
+// pathPolicies omits it entirely.
+func TestHerdrWorktreeSandboxCreateArgs_PathPolicies(t *testing.T) {
+	pp := domain.EgressPathPolicies{
+		"": {"api.github.com": domain.EgressHostPolicy{Paths: []string{"GET /repos/**"}}},
+	}
+
+	t.Run("non-empty pathPolicies emits --egress-policy-json", func(t *testing.T) {
+		args := herdrWorktreeSandboxCreateArgs("owner/branch", "src:dst", "--image", "myimage", nil, nil, "", pp)
+		joined := strings.Join(args, " ")
+		if !strings.Contains(joined, "--egress-policy-json") {
+			t.Fatalf("expected --egress-policy-json in args: %v", args)
+		}
+		var jsonVal string
+		for i, a := range args {
+			if a == "--egress-policy-json" && i+1 < len(args) {
+				jsonVal = args[i+1]
+				break
+			}
+		}
+		if jsonVal == "" {
+			t.Fatal("--egress-policy-json flag present but has no value")
+		}
+		var decoded domain.EgressPathPolicies
+		if err := json.Unmarshal([]byte(jsonVal), &decoded); err != nil {
+			t.Fatalf("JSON decode of --egress-policy-json value: %v", err)
+		}
+		if !reflect.DeepEqual(pp, decoded) {
+			t.Errorf("round-trip mismatch:\n  want %#v\n   got %#v", pp, decoded)
+		}
+	})
+
+	t.Run("nil pathPolicies omits --egress-policy-json", func(t *testing.T) {
+		args := herdrWorktreeSandboxCreateArgs("owner/branch", "src:dst", "--image", "myimage", nil, nil, "", nil)
+		for _, a := range args {
+			if a == "--egress-policy-json" {
+				t.Errorf("unexpected --egress-policy-json in args with nil pathPolicies: %v", args)
+			}
+		}
+	})
+
+	t.Run("empty pathPolicies omits --egress-policy-json", func(t *testing.T) {
+		args := herdrWorktreeSandboxCreateArgs("owner/branch", "src:dst", "--image", "myimage", nil, nil, "", domain.EgressPathPolicies{})
+		for _, a := range args {
+			if a == "--egress-policy-json" {
+				t.Errorf("unexpected --egress-policy-json in args with empty pathPolicies: %v", args)
+			}
+		}
+	})
 }

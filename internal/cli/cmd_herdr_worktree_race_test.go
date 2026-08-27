@@ -63,7 +63,7 @@ func TestHerdrWorktreeSandboxConcurrentCreateConverges(t *testing.T) {
 	// Use a real ULID sandbox ID so HerdrSpaceGetByHandle succeeds after create.
 	stubID := domain.NewSandboxID()
 
-	createFn := func(_ context.Context, h, _, _, _ string, _ []string, _ []string, _ string) error {
+	createFn := func(_ context.Context, h, _, _, _ string, _ []string, _ []string, _ string, _ domain.EgressPathPolicies) error {
 		createCount.Add(1)
 		started <- struct{}{}
 		<-release // block until test releases

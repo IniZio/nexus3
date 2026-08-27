@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/IniZio/nexus3/internal/core/domain"
@@ -1002,5 +1005,169 @@ func TestDevEgress_AgentDevEgressSecretHosts_NoAgent(t *testing.T) {
 	hosts := agentDevEgressSecretHosts(cred.AgentProfile{}, true)
 	if len(hosts) != 0 {
 		t.Errorf("agentDevEgressSecretHosts: got %v for zero profile; want nil", hosts)
+	}
+}
+
+// TestResolveCreateSecrets_PathPolicies verifies the D-PD-36 guard change:
+// a GitHub secret is ACCEPTED when covered by a path policy (--egress-policy-json
+// channel), even when --repo is absent; refused only when NEITHER is present.
+func TestResolveCreateSecrets_PathPolicies(t *testing.T) {
+	ctx := context.Background()
+	pp := domain.EgressPathPolicies{
+		"": {"api.github.com": domain.EgressHostPolicy{Paths: []string{"GET /repos/**"}}},
+	}
+
+	t.Run("github secret + covering pathPolicies + no --repo → accepted", func(t *testing.T) {
+		f := sandboxCreateFlags{
+			secrets:      []string{"GH_TOKEN@api.github.com"},
+			pathPolicies: pp,
+		}
+		_, err := resolveCreateSecrets(ctx, f)
+		if err != nil {
+			t.Errorf("expected nil error; got %v", err)
+		}
+	})
+
+	t.Run("github secret + no pathPolicies + no --repo → refused (D-PD-36)", func(t *testing.T) {
+		f := sandboxCreateFlags{
+			secrets: []string{"GH_TOKEN@api.github.com"},
+		}
+		_, err := resolveCreateSecrets(ctx, f)
+		if err == nil {
+			t.Error("expected D-PD-36 error; got nil")
+		}
+	})
+
+	t.Run("github secret + allowedRepo + no pathPolicies → accepted (shim)", func(t *testing.T) {
+		f := sandboxCreateFlags{
+			secrets:     []string{"GH_TOKEN@github.com"},
+			allowedRepo: "owner/repo",
+		}
+		_, err := resolveCreateSecrets(ctx, f)
+		if err != nil {
+			t.Errorf("expected nil error; got %v", err)
+		}
+	})
+
+	t.Run("non-github secret + no policy + no --repo → accepted", func(t *testing.T) {
+		f := sandboxCreateFlags{
+			secrets: []string{"GITLAB_TOKEN@gitlab.com"},
+		}
+		_, err := resolveCreateSecrets(ctx, f)
+		if err != nil {
+			t.Errorf("expected nil error for non-github secret; got %v", err)
+		}
+	})
+}
+
+// TestParseSandboxCreateArgs_EgressPolicyJSON verifies that --egress-policy-json
+// round-trips EgressPathPolicies into sandboxCreateFlags.pathPolicies.
+func TestParseSandboxCreateArgs_EgressPolicyJSON(t *testing.T) {
+	pp := domain.EgressPathPolicies{
+		"": {"api.github.com": domain.EgressHostPolicy{Paths: []string{"GET /repos/**"}}},
+	}
+	ppJSON, err := json.Marshal(pp)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	f, err := parseSandboxCreateArgs([]string{"--image", "myimage", "--egress-policy-json", string(ppJSON), "proj/name"})
+	if err != nil {
+		t.Fatalf("parseSandboxCreateArgs: %v", err)
+	}
+	if !reflect.DeepEqual(f.pathPolicies, pp) {
+		t.Errorf("pathPolicies round-trip mismatch:\n  want %#v\n   got %#v", pp, f.pathPolicies)
+	}
+}
+
+// ── D-PD-36-BYPASS regression tests ──────────────────────────────────────────
+//
+// The BELT and guard tests below are the regression suite for the sole-bound
+// bypass: a PathPolicies map with a non-"" top-level key (e.g. "x") looks
+// like a covering policy to an all-keys guard but is NEVER enforced by
+// lookupPolicy (which consults pp[placeholder] then pp[""]). The real
+// placeholder is minted AFTER PathPolicies is frozen at create time, so ""
+// is the only key enforcement will ever honour from a user-supplied map.
+
+// TestBelt_EgressPolicyJSON_BogusKey_Refused verifies the BELT (parse-time
+// rejection): --egress-policy-json with any non-"" top-level key is refused
+// as a usage error before reaching any guard.
+//
+// Mutation evidence: remove the for-range key check in parseSandboxCreateArgs →
+// parseSandboxCreateArgs returns nil error and the bogus-key policy silently
+// reaches resolveCreateSecrets, where the pre-fix guard would have accepted it.
+func TestBelt_EgressPolicyJSON_BogusKey_Refused(t *testing.T) {
+	// "x" is a non-"" key: never enforceable at create time.
+	pp := domain.EgressPathPolicies{
+		"x": {"api.github.com": domain.EgressHostPolicy{Paths: []string{"/**"}}},
+	}
+	ppJSON, err := json.Marshal(pp)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	_, err = parseSandboxCreateArgs([]string{
+		"--image", "myimage",
+		"--egress-policy-json", string(ppJSON),
+		"proj/name",
+	})
+	if err == nil {
+		t.Fatal("expected usage error for bogus-key --egress-policy-json; got nil")
+	}
+	var ue *UsageError
+	if !errors.As(err, &ue) {
+		t.Fatalf("expected *UsageError; got %T: %v", err, err)
+	}
+}
+
+// TestGuard_BogusKeyGitHubSecret_Refused verifies the guard fix at
+// resolveCreateSecrets: a GitHub secret with a PathPolicies map whose ONLY
+// entry is under a non-"" key is refused as unbounded (D-PD-36).
+//
+// NOTE: This test bypasses the BELT (parseSandboxCreateArgs) by constructing
+// sandboxCreateFlags directly — it exercises the guard predicate githubHostBoundCLI
+// in isolation to prove the predicate fix is correct independent of the BELT.
+//
+// Mutation evidence: revert githubHostBoundCLI to an all-keys loop →
+// resolveCreateSecrets returns nil (bogus-key policy appears to cover the host)
+// and this test fails.
+func TestGuard_BogusKeyGitHubSecret_Refused(t *testing.T) {
+	ctx := context.Background()
+	// "x" key: never reached by lookupPolicy at enforcement time.
+	pp := domain.EgressPathPolicies{
+		"x": {"api.github.com": domain.EgressHostPolicy{Paths: []string{"/**"}}},
+	}
+	f := sandboxCreateFlags{
+		secrets:      []string{"GH_TOKEN@api.github.com"},
+		pathPolicies: pp,
+		// allowedRepo: "",  // not set
+	}
+	_, err := resolveCreateSecrets(ctx, f)
+	if err == nil {
+		t.Fatal("expected D-PD-36 refusal for bogus-key PathPolicies; got nil")
+	}
+	var ue *UsageError
+	if !errors.As(err, &ue) {
+		t.Fatalf("expected *UsageError; got %T: %v", err, err)
+	}
+}
+
+// TestGuard_WildcardKeyGitHubSecret_Accepted verifies the positive ("" key)
+// path still works: a PathPolicies entry under "" covers the host and the
+// github secret is accepted without --repo.
+//
+// Mutation evidence: change githubHostBoundCLI to only accept allowedRepo
+// (removing the pp[""] check) → resolveCreateSecrets refuses this valid
+// configuration.
+func TestGuard_WildcardKeyGitHubSecret_Accepted(t *testing.T) {
+	ctx := context.Background()
+	pp := domain.EgressPathPolicies{
+		"": {"api.github.com": domain.EgressHostPolicy{Paths: []string{"GET /repos/**"}}},
+	}
+	f := sandboxCreateFlags{
+		secrets:      []string{"GH_TOKEN@api.github.com"},
+		pathPolicies: pp,
+	}
+	_, err := resolveCreateSecrets(ctx, f)
+	if err != nil {
+		t.Fatalf("expected nil for wildcard-key PathPolicies; got %v", err)
 	}
 }

@@ -480,8 +480,8 @@ func runHerdrPlugin(ctx context.Context, args []string, out *Output) error {
 		if exeErr != nil {
 			return &CodedError{Code: ErrCodeInternalError, Msg: "__herdr-plugin worktree-sandbox: resolve executable: " + exeErr.Error(), Err: exeErr}
 		}
-		createFn := func(ctx context.Context, handle, mountSpec, imageFlag, imageVal string, extraMounts, secrets []string, allowedRepo string) error {
-			args := herdrWorktreeSandboxCreateArgs(handle, mountSpec, imageFlag, imageVal, extraMounts, secrets, allowedRepo)
+		createFn := func(ctx context.Context, handle, mountSpec, imageFlag, imageVal string, extraMounts, secrets []string, allowedRepo string, pathPolicies domain.EgressPathPolicies) error {
+			args := herdrWorktreeSandboxCreateArgs(handle, mountSpec, imageFlag, imageVal, extraMounts, secrets, allowedRepo, pathPolicies)
 			cmd := herdrExecCommandContext(ctx, exe, append([]string{"sandbox", "create"}, args...)...)
 			cmd.Stdout = out.w
 			cmd.Stderr = out.w
@@ -2886,7 +2886,7 @@ func herdrWorkspaceRename(ctx context.Context, herdrBin, workspaceID, label stri
 // the main repo's .git directory so git is fully functional inside the guest
 // (D-PD-99-git: worktree .git resolution requires the main .git to be
 // reachable at its host absolute path inside the VM).
-func herdrWorktreeSandboxCreateArgs(handle, mountSpec, imageFlag, imageVal string, extraMounts, secrets []string, allowedRepo string) []string {
+func herdrWorktreeSandboxCreateArgs(handle, mountSpec, imageFlag, imageVal string, extraMounts, secrets []string, allowedRepo string, pathPolicies domain.EgressPathPolicies) []string {
 	args := []string{imageFlag, imageVal, "--mount", mountSpec}
 	for _, m := range extraMounts {
 		args = append(args, "--mount", m)
@@ -2910,6 +2910,17 @@ func herdrWorktreeSandboxCreateArgs(handle, mountSpec, imageFlag, imageVal strin
 	}
 	if allowedRepo != "" {
 		args = append(args, "--repo", allowedRepo)
+	}
+	// Convey generic path policies via --egress-policy-json when present.
+	// This is the channel that carries EgressPathPolicies from the herdr
+	// worktree path through the `sandbox create` subprocess boundary, replacing
+	// the discarded-variable gap (D-PDE-16 worktree path). JSON round-trips the
+	// exact policy including method-prefixed globs.
+	if len(pathPolicies) > 0 {
+		ppJSON, err := json.Marshal(pathPolicies)
+		if err == nil {
+			args = append(args, "--egress-policy-json", string(ppJSON))
+		}
 	}
 	args = append(args, "--agent", "claude-code", "--egress", "open", handle)
 	return args
@@ -3124,14 +3135,17 @@ func buildWorktreeEgressArgs(cfg config.Config) (secrets []string, allowedRepo s
 }
 
 // egressGitHubHostBound is the D-PDE-16 CLI-time check: is h covered by
-// allowedRepo (shim) or a PathPolicies entry?
+// allowedRepo (shim) or a PathPolicies entry under the WILDCARD key "" only.
+//
+// SECURITY: Only pp[""] is checked — not all top-level keys.  See
+// githubHostBoundCLI (cmd_sandbox.go) for the full rationale.
+// Revert this to an all-keys loop and TestBogusKeyGitHubSecret_Refused fails.
 func egressGitHubHostBound(h, allowedRepo string, pp domain.EgressPathPolicies) bool {
 	if allowedRepo != "" {
 		return true
 	}
-	hLower := strings.ToLower(h)
-	for _, hostMap := range pp {
-		if _, ok := hostMap[hLower]; ok {
+	if hostMap, ok := pp[""]; ok {
+		if _, ok := hostMap[strings.ToLower(h)]; ok {
 			return true
 		}
 	}
@@ -3343,7 +3357,7 @@ func herdrWorktreeSandbox(
 	openPane bool,
 	conditional bool,
 	auto bool,
-	createFn func(context.Context, string, string, string, string, []string, []string, string) error,
+	createFn func(context.Context, string, string, string, string, []string, []string, string, domain.EgressPathPolicies) error,
 	getFn func(context.Context, string) (domain.Sandbox, error),
 ) error {
 	// Step 1: idempotency.
@@ -3537,14 +3551,14 @@ func herdrWorktreeSandbox(
 			}
 		}
 	}
-	_ = egressPathPolicies // PathPolicies carried via Envelope for direct-service-call path; CLI subprocess uses --repo
-
 	// Step 7: create sandbox. A 90 s context covers image pull, ext4 setup,
 	// and VM boot on typical hardware. Explicit mode failures are real errors;
 	// auto/conditional mode is fail-safe (workspace stays a host shell).
+	// egressPathPolicies is conveyed to the subprocess via --egress-policy-json
+	// so the generic policy reaches MITM enforcement (D-PDE-16 worktree gap fix).
 	createCtx, createCancel := context.WithTimeout(ctx, herdrWorktreeCreateTimeout)
 	defer createCancel()
-	if err := createFn(createCtx, handle, mountSpec, imageFlag, imageVal, extraMounts, egressSecrets, egressAllowedRepo); err != nil {
+	if err := createFn(createCtx, handle, mountSpec, imageFlag, imageVal, extraMounts, egressSecrets, egressAllowedRepo, egressPathPolicies); err != nil {
 		fmt.Fprintf(w, "worktree-sandbox: sandbox create: %v\n", err)
 		if !failSafe {
 			return fmt.Errorf("worktree-sandbox: sandbox create: %w", err)

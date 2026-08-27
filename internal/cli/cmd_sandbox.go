@@ -365,8 +365,9 @@ type sandboxCreateFlags struct {
 	// name. Empty means the sandbox runs no agent and receives no credentials.
 	agentName       string
 	allowHosts      []string // --allow-host <hostname> (repeatable): add to AllowedHosts when --egress closed
-	allowedRepo     string   // --repo owner/name: scope MITM path allowlist to one GitHub repo (D-PD-36)
-	allowedBranches []string // --branches <ref>[,ref…]: git-push branch allowlist; default refs/heads/nexus3/*
+	allowedRepo     string                    // --repo owner/name: scope MITM path allowlist to one GitHub repo (D-PD-36)
+	pathPolicies    domain.EgressPathPolicies // --egress-policy-json: JSON-encoded generic path policies (worktree subprocess channel)
+	allowedBranches []string                  // --branches <ref>[,ref…]: git-push branch allowlist; default refs/heads/nexus3/*
 	mountNamed      []string // --mount-named <vol>:<guest-path>[:ro|kind=dir|size=Xg] (SD2-6-MOUNT)
 	mountLive       []string // --mount <host-path>:<guest-path>[:ro] (D-PD-53 live virtiofs)
 	noShareSettings bool     // --no-share-settings: skip curated host agent config overlay (A-MOUNT)
@@ -748,6 +749,35 @@ func parseSandboxCreateArgs(args []string) (sandboxCreateFlags, error) {
 				return f, &UsageError{Msg: fmt.Sprintf("sandbox create: --repo %q is not in owner/name format", args[i])}
 			}
 			f.allowedRepo = args[i]
+		case "--egress-policy-json":
+			// Internal flag: conveys EgressPathPolicies JSON from herdrWorktreeSandbox
+			// to the `sandbox create` subprocess (worktree create path). Not shown
+			// in human-facing help. JSON must round-trip domain.EgressPathPolicies.
+			if i+1 >= len(args) {
+				return f, &UsageError{Msg: "sandbox create: --egress-policy-json requires a JSON argument"}
+			}
+			i++
+			var pp domain.EgressPathPolicies
+			if err := json.Unmarshal([]byte(args[i]), &pp); err != nil {
+				return f, &UsageError{Msg: fmt.Sprintf("sandbox create: --egress-policy-json: %v", err)}
+			}
+			// BELT (D-PD-36-BELT): reject any non-"" top-level key.
+			// The real placeholder is minted AFTER PathPolicies is frozen at
+			// create time, so a policy under any key other than "" can never
+			// be reached by lookupPolicy and silently fails to bound the token.
+			// Reject it here as a usage error rather than letting it create an
+			// unbounded sandbox. This catches mis-keyed policies for ALL hosts
+			// (not just GitHub) — a mis-keyed gitlab policy also silently fails.
+			for k := range pp {
+				if k != "" {
+					return f, &UsageError{Msg: fmt.Sprintf(
+						"sandbox create: --egress-policy-json: top-level key %q is not enforceable "+
+							"(use the wildcard key \"\" — non-empty placeholder keys are only resolved "+
+							"after create time and would silently fail to bound the token)",
+						k)}
+				}
+			}
+			f.pathPolicies = pp
 		case "--branches":
 			// S0: git-push branch allowlist. Repeatable; also accepts comma-separated
 			// patterns in a single value. Default (when omitted) is
@@ -1959,6 +1989,7 @@ func runSandboxCreate(ctx context.Context, args []string, out *Output, svc *serv
 			ExtraSecretHosts:  agentDevEgressSecretHosts(agentProfile, openEgress),
 			AgentProfile:      agentProfile,  // zero value when --agent was not passed
 			AllowedRepo:       f.allowedRepo,     // D-PD-36: set by --repo; empty for open-egress sandboxes
+			PathPolicies:      f.pathPolicies,    // conveyed via --egress-policy-json on the worktree subprocess path
 			AllowedBranches:   f.allowedBranches, // S0: nil = default refs/heads/nexus3/* via ResolvedAllowedBranches
 			Volumes:           namedVS,       // SD2-6-MOUNT: nil when --mount-named not used
 			NamedVolumeMounts: namedMounts,
@@ -2013,8 +2044,8 @@ func runSandboxCreate(ctx context.Context, args []string, out *Output, svc *serv
 
 // resolveCreateSecrets parses --secret flags. No GitHub secret is added
 // automatically; callers must pass --secret GH_TOKEN@github.com explicitly
-// (D-PDE-02). The D-PD-36 guard still refuses any GitHub-touching bind when
-// --repo is absent.
+// (D-PDE-02). The D-PD-36 guard refuses any GitHub-touching bind when NEITHER
+// --repo NOR a covering --egress-policy-json entry is present.
 func resolveCreateSecrets(ctx context.Context, f sandboxCreateFlags) ([]service.SecretBind, error) {
 	var binds []service.SecretBind
 	for _, spec := range f.secrets {
@@ -2024,22 +2055,50 @@ func resolveCreateSecrets(ctx context.Context, f sandboxCreateFlags) ([]service.
 		}
 		binds = append(binds, b)
 	}
-	// D-PD-36: if any resolved secret bind covers a GitHub host and AllowedRepo
-	// is not set, the operator's full-scope token would be unbounded — every
-	// repository the account can reach is accessible. Refuse with an actionable
-	// error. The --egress closed path is caught earlier at parse time; this
-	// guard covers every other path (explicit --secret binds that name GitHub
-	// hosts, etc.).
-	if f.allowedRepo == "" {
-		for _, b := range binds {
-			if service.SecretTouchesGitHub(b) {
-				return nil, &UsageError{Msg: "sandbox create: GitHub credential would be " +
-					"unbounded (D-PD-36): pass --repo owner/name to scope the per-repo " +
-					"path allowlist"}
+	// D-PD-36: if any resolved secret bind covers a GitHub host it must be
+	// bounded by EITHER --repo (AllowedRepo shim) OR a path-policy entry that
+	// covers the host (--egress-policy-json, the generic policy channel used by
+	// the worktree subprocess path). Refuse when a GitHub host has neither.
+	for _, b := range binds {
+		if !service.SecretTouchesGitHub(b) {
+			continue
+		}
+		for _, h := range b.Hosts {
+			if !domain.IsGitHubHost(strings.ToLower(h)) {
+				continue
 			}
+			if githubHostBoundCLI(h, f.allowedRepo, f.pathPolicies) {
+				continue
+			}
+			return nil, &UsageError{Msg: "sandbox create: GitHub credential would be " +
+				"unbounded (D-PD-36): pass --repo owner/name to scope the per-repo " +
+				"path allowlist"}
 		}
 	}
 	return binds, nil
+}
+
+// githubHostBoundCLI mirrors the service-layer githubHostBoundByPolicy check
+// at the CLI layer: returns true when the host is covered by allowedRepo (the
+// --repo shim) or by a PathPolicies entry under the WILDCARD key "" only.
+//
+// SECURITY: Only the wildcard key "" is checked — not all top-level keys.
+// lookupPolicy (proxy.go) consults pp[<real-placeholder>] then pp[""].
+// The real placeholder is minted AFTER PathPolicies is frozen at create time,
+// so "" is the ONLY key enforcement will ever honour from a user-supplied map.
+// A policy stored under any other key passes every all-keys guard but is never
+// enforced — the full-scope PAT would be brokered unbounded.
+// Revert this to an all-keys loop and TestBogusKeyGitHubSecret_Refused fails.
+func githubHostBoundCLI(h, allowedRepo string, pp domain.EgressPathPolicies) bool {
+	if allowedRepo != "" {
+		return true
+	}
+	if hostMap, ok := pp[""]; ok {
+		if _, ok := hostMap[strings.ToLower(h)]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // handoffHumanSupervisor stops the in-process boot VM and re-owns it in a
